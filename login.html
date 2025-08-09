@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style type="text/tailwindcss">
+        :root {
+            --background: #0D0D0D;
+            --surface: #1A1A1A;
+            --primary: #39FF14;
+            --on-surface: #FFFFFF;
+            --on-surface-variant: #A3A3A3;
+        }
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--background);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-[var(--background)] text-[var(--on-surface)]">
+<div class="relative flex flex-col min-h-screen">
+<header class="flex items-center p-4">
+<button class="p-2">
+<svg class="text-[var(--on-surface)]" fill="currentColor" height="24" viewBox="0 0 256 256" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z"></path>
+</svg>
+</button>
+</header>
+<main class="flex-grow flex flex-col justify-center px-6">
+<div class="text-center mb-12">
+<h1 class="text-4xl font-bold tracking-tighter">Welcome Back</h1>
+<p class="text-[var(--on-surface-variant)] mt-2">Sign in to continue your virtual style journey.</p>
+</div>
+<div class="space-y-4">
+<div class="relative">
+<input class="w-full h-14 bg-[var(--surface)] border border-transparent focus:border-[var(--primary)] rounded-lg px-4 text-base placeholder:text-[var(--on-surface-variant)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] transition-all duration-300" placeholder="Email or phone number" type="email"/>
+</div>
+<div class="relative">
+<input class="w-full h-14 bg-[var(--surface)] border border-transparent focus:border-[var(--primary)] rounded-lg px-4 text-base placeholder:text-[var(--on-surface-variant)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] transition-all duration-300" placeholder="Password" type="password"/>
+</div>
+</div>
+<div class="mt-2 text-right">
+<a class="text-sm font-medium text-[var(--on-surface-variant)] hover:text-[var(--primary)] transition-colors duration-300" href="#">Forgot password?</a>
+</div>
+<div class="mt-8 space-y-4">
+<a href="home.html"><button class="w-full h-14 bg-[var(--primary)] text-black font-bold text-base rounded-lg flex items-center justify-center transition-transform duration-200 active:scale-95">
+                    Sign In
+                </button>
+<div class="flex items-center my-6">
+<hr class="w-full border-[var(--surface)]"/>
+<span class="px-3 text-sm text-[var(--on-surface-variant)]">OR</span>
+<hr class="w-full border-[var(--surface)]"/>
+</div>
+<button class="w-full h-14 bg-transparent border border-[var(--surface)] text-[var(--on-surface)] font-bold text-base rounded-lg flex items-center justify-center gap-3 hover:bg-[var(--surface)] transition-colors duration-300">
+<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M21.35 12.08C21.35 11.23 21.28 10.42 21.15 9.64H12.24V14.2H17.43C17.2 15.53 16.52 16.63 15.48 17.34V19.75H18.3C20.17 18.04 21.35 15.28 21.35 12.08Z" fill="#4285F4"></path>
+<path d="M12.24 22C15.02 22 17.35 21.08 18.99 19.75L15.48 17.34C14.54 18 13.51 18.42 12.24 18.42C9.79 18.42 7.72 16.83 6.95 14.56H4.02V17.02C5.64 20.02 8.68 22 12.24 22Z" fill="#34A853"></path>
+<path d="M6.95 14.56C6.75 13.96 6.63 13.32 6.63 12.65C6.63 11.98 6.75 11.34 6.95 10.74V8.28H4.02C3.32 9.66 2.92 11.12 2.92 12.65C2.92 14.18 3.32 15.64 4.02 17.02L6.95 14.56Z" fill="#FBBC05"></path>
+<path d="M12.24 6.88C13.67 6.88 14.88 7.38 15.79 8.24L19.05 5.14C17.34 3.58 15.02 2.6 12.24 2.6C8.68 2.6 5.64 5.29 4.02 8.28L6.95 10.74C7.72 8.47 9.79 6.88 12.24 6.88Z" fill="#EA4335"></path>
+</svg>
+                    Sign in with Google
+                </button>
+</div>
+</main>
+<footer class="py-8 px-6 text-center">
+<p class="text-sm">
+<span class="text-[var(--on-surface-variant)]">Don't have an account? </span>
+<a class="font-bold text-[var(--primary)]" href="signup.html">Sign up</a>
+</p>
+</footer>
+</div>
+
+</body></html>

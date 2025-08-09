@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>profile</title>
+<link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style type="text/tailwindcss">
+        :root {
+            --background-color: #121212;
+            --primary-color: #06f81a;
+            --card-background: #1E1E1E;
+            --text-primary: #FFFFFF;
+            --text-secondary: #A0A0A0;
+            --nav-background: #1A1A1A;
+        }
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-[var(--background-color)] text-[var(--text-primary)]">
+<div class="relative flex size-full min-h-screen flex-col justify-between group/design-root overflow-x-hidden">
+<main class="flex-grow">
+<div class="relative h-96">
+<img alt="User profile photo" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQGAzH0HhXcsUHfmfNeOXdCFRazNUVPFeCj_Y2nx3zZCJ6cIi-pXITSQSdwIpxzArJQ1VRbfuI8aIRr6-5ZIc3_OPRDuMoTQoAkw0Pfp9NAUnBtisSNe_FB8OQrOJxP70QnSI0p2DM0IYX1WC8Nc_yD-NFWSVFCBgcueDWS9Gy31KqHvyxyB27jEYxbzeAvBloXF0xg13MhcJbiy8fnABnlHRFAS-EwGLQLPBGAef9tskbJhSpb0mXsmQ7g-xMDqLtjn8koimXdKvb"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+<div class="absolute bottom-4 right-4">
+<button class="flex items-center gap-2 rounded-full bg-[var(--primary-color)] px-4 py-2 text-sm font-bold text-black">
+<svg class="bi bi-camera" fill="currentColor" height="16" viewBox="0 0 16 16" width="16" xmlns="http://www.w3.org/2000/svg">
+<path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1v6zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2z"></path>
+<path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5zm0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0z"></path>
+</svg>
+                        Change Photo
+                    </button>
+</div>
+</div>
+<div class="p-6 space-y-6 -mt-8">
+<div class="flex justify-between items-start">
+<h1 class="text-3xl font-bold">Alexia Doe</h1>
+<button class="text-[var(--primary-color)] flex items-center gap-1 text-sm font-medium">
+<svg fill="currentColor" height="16" viewBox="0 0 256 256" width="16" xmlns="http://www.w3.org/2000/svg"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z"></path></svg>
+                        Edit
+                    </button>
+</div>
+<div class="space-y-4">
+<div class="flex items-center">
+<svg class="text-[var(--text-secondary)] mr-4" fill="currentColor" height="20" viewBox="0 0 256 256" width="20" xmlns="http://www.w3.org/2000/svg"><path d="M224,152v48a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V56A16,16,0,0,1,48,40h88a8,8,0,0,1,0,16H48v5.37a8,8,0,0,1-1.9,5.34l-8,8a8,8,0,0,1-11.31,0l-8-8A8,8,0,0,1,16,61.37V56a32,32,0,0,1,32-32H208a32,32,0,0,1,32,32v96a8,8,0,0,1-16,0ZM208,24H48A24,24,0,0,0,24,48V61.37a16.14,16.14,0,0,1,4.69-11.32l8-8a16.14,16.14,0,0,1,11.31-4.68A16,16,0,0,1,48,56v8a8,8,0,0,1-16,0V56a8,8,0,0,1,1.9-5.34l.25-.25a8,8,0,0,1,10.22-1.07l.25.16,8,8a24,24,0,0,0,33.94,0l8-8A24,24,0,0,0,96,40h32a8,8,0,0,1,0,16H96a8,8,0,0,1-5.66-2.34l-8,8A8,8,0,0,1,72,56V48a8,8,0,0,1,8-8h48a8,8,0,0,1,0,16Zm-8,144a8,8,0,0,0,8-8V152a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,8,8Zm-24-40a8,8,0,0,0,8,8h8v8a8,8,0,0,0,16,0v-8h8a8,8,0,0,0,0-16h-8v-8a8,8,0,0,0-16,0v8h-8a8,8,0,0,0-8,8Z"></path></svg>
+<div>
+<p class="text-xs text-[var(--text-secondary)]">Phone</p>
+<p class="font-medium">+1 234 567 890</p>
+</div>
+</div>
+<div class="flex items-center">
+<svg class="text-[var(--text-secondary)] mr-4" fill="currentColor" height="20" viewBox="0 0 256 256" width="20" xmlns="http://www.w3.org/2000/svg"><path d="M224,48H32a8,8,0,0,0-8,8V192a8,8,0,0,0,8,8H224a8,8,0,0,0,8-8V56A8,8,0,0,0,224,48Zm-8,136H40V80.83l84.69,53.2a8,8,0,0,0,6.62,0L216,80.83V184ZM128,122.4,40,71.25V64H216v7.25Z"></path></svg>
+<div>
+<p class="text-xs text-[var(--text-secondary)]">Email</p>
+<p class="font-medium">alexia.doe@example.com</p>
+</div>
+</div>
+</div>
+<div class="border-t border-white/10 pt-6">
+<h2 class="text-xl font-bold mb-4">Measurements</h2>
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-[var(--card-background)] p-4 rounded-lg">
+<p class="text-xs text-[var(--text-secondary)]">Height</p>
+<p class="text-lg font-bold">175 cm</p>
+</div>
+<div class="bg-[var(--card-background)] p-4 rounded-lg">
+<p class="text-xs text-[var(--text-secondary)]">Weight</p>
+<p class="text-lg font-bold">62 kg</p>
+</div>
+<div class="bg-[var(--card-background)] p-4 rounded-lg">
+<p class="text-xs text-[var(--text-secondary)]">Chest</p>
+<p class="text-lg font-bold">88 cm</p>
+</div>
+<div class="bg-[var(--card-background)] p-4 rounded-lg">
+<p class="text-xs text-[var(--text-secondary)]">Waist</p>
+<p class="text-lg font-bold">68 cm</p>
+</div>
+<div class="bg-[var(--card-background)] p-4 rounded-lg">
+<p class="text-xs text-[var(--text-secondary)]">Hips</p>
+<p class="text-lg font-bold">95 cm</p>
+</div>
+<div class="bg-[var(--card-background)] p-4 rounded-lg">
+<p class="text-xs text-[var(--text-secondary)]">Inseam</p>
+<p class="text-lg font-bold">80 cm</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<footer class="sticky bottom-0 bg-[var(--nav-background)] rounded-t-2xl">
+<nav class="flex items-center justify-around p-2">
+<a class="flex flex-col items-center justify-center gap-1 text-[var(--text-secondary)] w-16 h-16" href="home.html">
+<svg fill="currentColor" height="28px" viewBox="0 0 256 256" width="28px" xmlns="http://www.w3.org/2000/svg"><path d="M224,115.55V208a16,16,0,0,1-16,16H168a16,16,0,0,1-16-16V168a8,8,0,0,0-8-8H112a8,8,0,0,0-8,8v40a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V115.55a16,16,0,0,1,5.17-11.78l80-75.48.11-.11a16,16,0,0,1,21.53,0,1.14,1.14,0,0,0,.11.11l80,75.48A16,16,0,0,1,224,115.55Z"></path></svg>
+<span class="text-xs font-medium">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 text-[var(--text-secondary)] w-16 h-16" href="favorites.html">
+<svg fill="currentColor" height="28px" viewBox="0 0 256 256" width="28px" xmlns="http://www.w3.org/2000/svg"><path d="M178,32c-20.65,0-38.73,8.88-50,23.89C116.73,40.88,98.65,32,78,32A62.07,62.07,0,0,0,16,94c0,70,103.79,126.66,108.21,129a8,8,0,0,0,7.58,0C136.21,220.66,240,164,240,94A62.07,62.07,0,0,0,178,32ZM128,206.8C109.74,196.16,32,147.69,32,94A46.06,46.06,0,0,1,78,48c19.45,0,35.78,10.36,42.6,27a8,8,0,0,0,14.8,0c6.82-16.67,23.15-27,42.6-27a46.06,46.06,0,0,1,46,46C224,147.61,146.24,196.15,128,206.8Z"></path></svg>
+<span class="text-xs font-medium">Favorites</span>
+</a>
+<a class="flex items-center justify-center -translate-y-4 rounded-full bg-[var(--primary-color)] text-black w-16 h-16 shadow-lg shadow-[var(--primary-color)]/30" href="qr.html">
+<svg fill="currentColor" height="36px" viewBox="0 0 256 256" width="36px" xmlns="http://www.w3.org/2000/svg"><path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48v48Zm0,32H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48v48ZM200,40H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48v48Zm-64,72V144a8,8,0,0,1,16,0v32a8,8,0,0,1-16,0Zm80-16a8,8,0,0,1-8,8H184v40a8,8,0,0,1-8,8H144a8,8,0,0,1,0-16h24V144a8,8,0,0,1,16,0v8h24A8,8,0,0,1,216,160Zm0,32v16a8,8,0,0,1-16,0V192a8,8,0,0,1,16,0Z"></path></svg>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 text-[var(--text-secondary)] w-16 h-16" href="cart.html">
+<svg fill="currentColor" height="28px" viewBox="0 0 256 256" width="28px" xmlns="http://www.w3.org/2000/svg"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM176,88a48,48,0,0,1-96,0,8,8,0,0,1,16,0,32,32,0,0,0,64,0,8,8,0,0,1,16,0Z"></path></svg>
+<span class="text-xs font-medium">Cart</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 text-[var(--text-primary)] w-16 h-16 relative" href="profile.html">
+<div class="absolute -top-1 w-8 h-1 bg-[var(--primary-color)] rounded-full"></div>
+<svg fill="currentColor" height="28px" viewBox="0 0 256 256" width="28px" xmlns="http://www.w3.org/2000/svg"><path d="M230.92,212c-15.23-26.33-38.7-45.21-66.09-54.16a72,72,0,1,0-73.66,0C63.78,166.78,40.31,185.66,25.08,212a8,8,0,1,0,13.85,8c18.84-32.56,52.14-52,89.07-52s70.23,19.44,89.07,52a8,8,0,1,0,13.85-8ZM72,96a56,56,0,1,1,56,56A56.06,56.06,0,0,1,72,96Z"></path></svg>
+<span class="text-xs font-medium">Profile</span>
+</a>
+</nav>
+</footer>
+</div>
+
+</body></html>
