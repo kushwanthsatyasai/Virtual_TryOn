@@ -23,48 +23,75 @@ from app.models import user as user_model
 from app.models import tryon_history as history_model
 from app.models import wardrobe as wardrobe_model
 from app.models import social as social_model
-from app.services.ai_service import AIService
-from app.services.auth_service import AuthService
-from app.services.size_recommendation_service import SizeRecommendationService
 from app.core.config import settings
 
+# Import services lazily to prevent import-time crashes
+# These may have heavy dependencies that cause issues during import
+AuthService = None
+SizeRecommendationService = None
+
+try:
+    from app.services.auth_service import AuthService
+except Exception:
+    pass  # Will be imported when needed
+
+try:
+    from app.services.size_recommendation_service import SizeRecommendationService
+except Exception:
+    pass  # Will be imported when needed
+
+# Don't import AIService at module level - it may crash during import
+# Import it lazily when needed
+
 # Create tables (with error handling for deployment)
+# Make this silent - don't print during import
 try:
     Base.metadata.create_all(bind=engine)
-    print("✓ Database tables created/verified")
-except Exception as e:
-    print(f"⚠ Warning: Database initialization error: {e}")
-    print("App will continue but database features may not work.")
+except Exception:
+    pass  # Database will be created on first use if needed
 
 # Initialize services (global) - with error handling
 ai_service = None
 
 def get_ai_service():
-    """Lazy load AI service - only initialize when needed"""
+    """Lazy load AI service - only import and initialize when needed"""
     global ai_service
+    
     if ai_service is None:
         try:
-            print("Initializing AI Service (lazy load)...")
-            sys.stdout.flush()
+            # Import AIService only when needed (lazy import)
+            from app.services.ai_service import AIService
+            # Initialize the service
             ai_service = AIService()
-            print("✓ AI Service initialized")
-            sys.stdout.flush()
         except Exception as e:
-            print(f"⚠ Warning: AI Service initialization failed: {e}")
-            sys.stdout.flush()
             raise HTTPException(
                 status_code=503,
-                detail="AI Service is not available. Please try again later."
+                detail=f"AI Service is not available: {str(e)}"
             )
     return ai_service
 
-try:
-    auth_service = AuthService()
-    size_service = SizeRecommendationService()
-except Exception as e:
-    print(f"⚠ Warning: Service initialization error: {e}")
-    auth_service = None
-    size_service = None
+# Initialize services lazily (don't initialize at module level)
+# Initialize them when first needed to prevent startup crashes
+auth_service = None
+size_service = None
+
+def get_auth_service():
+    """Lazy load auth service"""
+    global auth_service, AuthService
+    if auth_service is None:
+        if AuthService is None:
+            from app.services.auth_service import AuthService
+        auth_service = AuthService()
+    return auth_service
+
+def get_size_service():
+    """Lazy load size recommendation service"""
+    global size_service, SizeRecommendationService
+    if size_service is None:
+        if SizeRecommendationService is None:
+            from app.services.size_recommendation_service import SizeRecommendationService
+        size_service = SizeRecommendationService()
+    return size_service
 
 # Lifespan event handler - MUST be fast and non-blocking
 @asynccontextmanager
@@ -173,7 +200,8 @@ async def get_current_user(
     db: Session = Depends(get_db)
 ):
     """Get current authenticated user"""
-    payload = auth_service.verify_token(token)
+    auth = get_auth_service()
+    payload = auth.verify_token(token)
     
     if payload is None:
         raise HTTPException(
@@ -218,7 +246,8 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         )
     
     # Validate password
-    is_valid, message = auth_service.validate_password_strength(user_data.password)
+    auth = get_auth_service()
+    is_valid, message = auth.validate_password_strength(user_data.password)
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -226,7 +255,8 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         )
     
     # Create user
-    hashed_password = auth_service.get_password_hash(user_data.password)
+    auth = get_auth_service()
+    hashed_password = auth.get_password_hash(user_data.password)
     new_user = user_model.User(
         email=user_data.email,
         username=user_data.username,
@@ -239,7 +269,8 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     
     # Create token
-    access_token = auth_service.create_access_token(data={"sub": str(new_user.id)})
+    auth = get_auth_service()
+    access_token = auth.create_access_token(data={"sub": str(new_user.id)})
     
     return Token(
         access_token=access_token,
@@ -258,7 +289,8 @@ async def login(
         user_model.User.username == form_data.username
     ).first()
     
-    if not user or not auth_service.verify_password(form_data.password, user.hashed_password):
+    auth = get_auth_service()
+    if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password"
@@ -269,7 +301,8 @@ async def login(
     db.commit()
     
     # Create token
-    access_token = auth_service.create_access_token(data={"sub": str(user.id)})
+    auth = get_auth_service()
+    access_token = auth.create_access_token(data={"sub": str(user.id)})
     
     return Token(
         access_token=access_token,
