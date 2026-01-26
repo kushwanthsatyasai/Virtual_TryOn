@@ -40,11 +40,24 @@ size_service = SizeRecommendationService()
 async def lifespan(app: FastAPI):
     # Startup
     global ai_service
-    ai_service = AIService()
-    os.makedirs("temp/uploads", exist_ok=True)
-    os.makedirs("temp/results", exist_ok=True)
-    os.makedirs("uploads/avatars", exist_ok=True)
-    os.makedirs("uploads/wardrobe", exist_ok=True)
+    try:
+        # Create directories first
+        os.makedirs("temp/uploads", exist_ok=True)
+        os.makedirs("temp/results", exist_ok=True)
+        os.makedirs("uploads/avatars", exist_ok=True)
+        os.makedirs("uploads/wardrobe", exist_ok=True)
+        os.makedirs("static/generated_outputs", exist_ok=True)
+        
+        # Initialize AI service (may fail but app should still start)
+        try:
+            ai_service = AIService()
+        except Exception as e:
+            print(f"Warning: AI Service initialization failed: {e}")
+            ai_service = None
+    except Exception as e:
+        print(f"Startup error: {e}")
+        import traceback
+        traceback.print_exc()
     yield
     # Shutdown (cleanup if needed)
 

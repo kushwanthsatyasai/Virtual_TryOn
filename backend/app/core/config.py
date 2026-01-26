@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     
     # Server
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
-    DEBUG: bool = True
+    PORT: int = int(os.getenv("PORT", 8000))  # Render sets PORT automatically
+    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"  # Default False in production
     PROJECT_NAME: str = "Virtue Try-On API"
     API_V1_STR: str = "/api/v1"
     CORS_ORIGINS: list = ["*"]  # Allow all origins in development
