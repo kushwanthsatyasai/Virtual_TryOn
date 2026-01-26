@@ -1,0 +1,79 @@
+# Production Virtual Try-On - AI Models Requirements
+# =====================================================
+# This is for PRODUCTION-READY AI virtual try-on
+# Using: IDM-VTON, U2-Net, MediaPipe for photorealistic results
+#
+# PYTHON VERSION: 3.11 recommended (3.9-3.12 supported)
+# Python 3.13: Use requirements-py313.txt (MediaPipe not yet available)
+
+# Core Backend
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+alembic>=1.12.0
+
+# Authentication and Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
+
+# Data Validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+email-validator>=2.1.0
+
+# ============================================
+# AI/ML Models (PRODUCTION QUALITY)
+# ============================================
+
+# Deep Learning Framework
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Person & Cloth Segmentation (U2-Net)
+rembg>=2.0.50
+
+# Pose Detection (MediaPipe)
+mediapipe>=0.10.8
+opencv-python>=4.8.0
+
+# Virtual Try-On Model (IDM-VTON / Kolors)
+diffusers>=0.24.0
+transformers>=4.36.0
+accelerate>=0.25.0
+huggingface-hub>=0.19.0
+
+# Kolors-specific (optional - for local Kolors model)
+# invisible-watermark>=0.2.0  # Uncomment if running Kolors locally
+# xformers>=0.0.22  # Uncomment for GPU optimization (Linux/Windows with CUDA)
+
+# Image Processing
+numpy>=1.24.0
+pillow>=10.0.0
+scipy>=1.11.0
+scikit-image>=0.22.0
+
+# Visual Similarity Search (Fashion Recommendation)
+faiss-cpu>=1.7.4  # Use faiss-gpu if you have CUDA
+
+# AI Chat Assistant (choose one or more)
+openai>=1.3.0  # For GPT-4, GPT-3.5
+anthropic>=0.7.0  # For Claude (optional)
+# ollama  # For local LLMs (install separately)
+
+# ============================================
+# Utilities
+# ============================================
+python-dotenv>=1.0.0
+requests>=2.31.0
+aiofiles>=23.2.0
+gradio_client>=0.10.0
+
+# Development & Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+httpx>=0.25.0

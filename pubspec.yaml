@@ -30,6 +30,14 @@ dependencies:
   mobile_scanner: ^3.4.1
   image_picker: ^1.0.4
   permission_handler: ^11.0.1
+  flutter_svg: ^2.0.17
+  dio: ^5.3.2
+  shared_preferences: ^2.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
 
 flutter:
 
@@ -52,5 +60,5 @@ flutter:
     - assets/fonts/
     - assets/icons/
 
-flutter_web_plugins:
-  pluginClass: QrScannerPlugin
+# flutter_web_plugins:
+#   pluginClass: QrScannerPlugin

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: virtue-tryon-api
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn complete_api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///./virtue_tryon.db
+      - key: HF_TOKEN
+        sync: false

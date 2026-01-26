@@ -26,7 +26,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       backgroundColor: background,
       // Sticky Header
       appBar: AppBar(
-        backgroundColor: background.withOpacity(0.5),
+        backgroundColor: background.withValues(alpha: 0.5),
         flexibleSpace: ClipRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -176,7 +176,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: background.withOpacity(0.5),
+              color: background.withValues(alpha: 0.5),
             ),
             child: SafeArea(
               child: SizedBox(

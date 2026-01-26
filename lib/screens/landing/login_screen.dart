@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../signup/signup_screen.dart';  // Correct import path
 import '../home/home_screen.dart'; // Import the HomeScreen
+import 'package:flutter_svg/flutter_svg.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -184,8 +185,8 @@ class LoginScreen extends StatelessWidget {
                           fontFamily: 'SpaceGrotesk',
                           ),
                         ),
-                        icon: Image.asset(
-                          'assets/images/google_logo.png',  // Update with your image path
+                        icon: SvgPicture.asset(
+                          'assets/icons/google_logo.svg',
                           width: 24,
                           height: 24,
                         ),

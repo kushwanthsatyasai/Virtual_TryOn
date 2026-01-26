@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import '../../widgets/bottom_navigation_bar.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -193,57 +194,9 @@ class _CartScreenState extends State<CartScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        height: 56,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.black.withOpacity(0.8),
-              Colors.black.withOpacity(0.6),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.1),
-            width: 0.5,
-          ),
+                           bottomNavigationBar: const CustomBottomNavigationBar(
+          currentIndex: 2,
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(
-                  icon: Icons.home_rounded,
-                  isActive: false,
-                  onTap: () => Navigator.pop(context),
-                ),
-                _buildNavItem(
-                  icon: Icons.favorite_outline,
-                  isActive: false,
-                  onTap: () {},
-                ),
-                _buildScannerButton(),
-                _buildNavItem(
-                  icon: Icons.shopping_bag_outlined,
-                  isActive: true,
-                  onTap: () {},
-                ),
-                _buildNavItem(
-                  icon: Icons.person_outline,
-                  isActive: false,
-                  onTap: () {},
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -300,57 +253,7 @@ class _CartScreenState extends State<CartScreen> {
     });
   }
 
-  Widget _buildNavItem({
-    required IconData icon,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: isActive 
-            ? const Color(0xFF06F81A) 
-            : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Icon(
-          icon,
-          color: isActive 
-            ? Colors.black
-            : Colors.white.withOpacity(0.7),
-          size: 24,
-        ),
-      ),
-    );
-  }
 
-  Widget _buildScannerButton() {
-    return Container(
-      width: 56,
-      height: 56,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF06F81A),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF06F81A).withOpacity(0.3),
-            blurRadius: 12,
-            spreadRadius: 2,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: const Icon(
-        Icons.qr_code_scanner,
-        color: Colors.black,
-        size: 28,
-      ),
-    );
-  }
 }
 
 class CartItem {

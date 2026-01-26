@@ -15,8 +15,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.dark(
           primary: const Color(0xFF06F81A),
-          surface: const Color(0xFF1E1E1E),
-          background: const Color(0xFF121212),
+          surface: const Color(0xFF121212),
           secondary: const Color(0xFFA0A0A0),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(

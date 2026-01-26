@@ -14,7 +14,7 @@ class QRScreen extends StatefulWidget {
 class _QRScreenState extends State<QRScreen> with SingleTickerProviderStateMixin {
   late MobileScannerController controller;
   late AnimationController _beamController;
-  String statusText = 'Place the QR code inside the frame to scan';
+  String statusText = 'Starting camera...';
 
   @override
   void initState() {
@@ -33,6 +33,10 @@ class _QRScreenState extends State<QRScreen> with SingleTickerProviderStateMixin
       setState(() {
         statusText = 'Camera access denied. Please allow camera permissions.';
       });
+    } else {
+      setState(() {
+        statusText = 'Camera active. Point at QR code.';
+      });
     }
   }
 
@@ -47,170 +51,170 @@ class _QRScreenState extends State<QRScreen> with SingleTickerProviderStateMixin
   Widget build(BuildContext context) {
     const backgroundColor = Color(0xFF000000);
     const primaryColor = Color(0xFF06F81A);
+    const cardBackground = Color(0xFF1E1E1E);
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.black.withOpacity(0.5),
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Scan QR Code',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'SpaceGrotesk',
-          ),
-        ),
-      ),
-      body: Stack(
+      body: Column(
         children: [
-          MobileScanner(
-            controller: controller,
-            onDetect: (capture) {
-              final List<Barcode> barcodes = capture.barcodes;
-              for (final barcode in barcodes) {
-                _handleQRCode(barcode.rawValue ?? '');
-              }
-            },
-          ),
-          CustomPaint(
-            painter: ScannerOverlay(
-              borderColor: primaryColor,
-              borderRadius: 12,
-              borderLength: 24,
-              borderWidth: 4,
-              cutOutSize: 256,
+          // Header - matches qr.html exactly
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.5),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Close button (X)
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                // Title
+                const Text(
+                  'Scan QR Code',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'SpaceGrotesk',
+                  ),
+                ),
+                // Spacer to balance layout
+                const SizedBox(width: 24),
+              ],
             ),
           ),
-          Center(
-            child: AnimatedBuilder(
-              animation: _beamController,
-              builder: (context, child) {
-                return Positioned(
-                  top: _beamController.value * 256,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: 2,
-                    decoration: BoxDecoration(
+
+          // Main content - centered scanner container
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Scanner container with dashed border - matches qr.html
+                Container(
+                  width: 256, // 64 * 4 = 256
+                  height: 256,
+                  decoration: BoxDecoration(
+                    border: Border.all(
                       color: primaryColor,
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withOpacity(0.5),
-                          blurRadius: 8,
-                          spreadRadius: 2,
+                      width: 4,
+                      style: BorderStyle.solid,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Stack(
+                      children: [
+                        // Camera view
+                        MobileScanner(
+                          controller: controller,
+                          onDetect: (capture) {
+                            final List<Barcode> barcodes = capture.barcodes;
+                            for (final barcode in barcodes) {
+                              _handleQRCode(barcode.rawValue ?? '');
+                            }
+                          },
+                        ),
+                        // Scanner beam animation
+                        AnimatedBuilder(
+                          animation: _beamController,
+                          builder: (context, child) {
+                            return Positioned(
+                              top: _beamController.value * 256,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                height: 2,
+                                decoration: BoxDecoration(
+                                  color: primaryColor,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: primaryColor.withValues(alpha: 0.5),
+                                      blurRadius: 8,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
                   ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            bottom: 16,
-            left: 16,
-            right: 16,
-            child: Column(
-              children: [
-                Text(
-                  statusText,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                    fontFamily: 'SpaceGrotesk',
-                  ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black.withOpacity(0.7),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(
-                        color: Colors.white24,
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  onPressed: _pickFromGallery,
-                  icon: Icon(
-                    Icons.photo_library_outlined,
-                    color: primaryColor,
-                  ),
-                  label: const Text(
-                    'Access from Gallery',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
+
+                // Status text
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Text(
+                    statusText,
+                    style: const TextStyle(
+                      color: Color(0xFFA0A0A0),
+                      fontSize: 14,
                       fontFamily: 'SpaceGrotesk',
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        height: 56,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.black.withOpacity(0.8),
-              Colors.black.withOpacity(0.6),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.1),
-            width: 0.5,
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(
-                  icon: Icons.home_rounded,
-                  isActive: false,
-                  onTap: () => Navigator.pop(context),
+
+          // Footer - matches qr.html exactly
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBackground,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: backgroundColor,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
                 ),
-                _buildNavItem(
-                  icon: Icons.favorite_outline,
-                  isActive: false,
-                  onTap: () {},
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(
+                    color: Color(0xFF404040),
+                    width: 1,
+                  ),
                 ),
-                _buildScannerButton(true),
-                _buildNavItem(
-                  icon: Icons.shopping_bag_outlined,
-                  isActive: false,
-                  onTap: () {},
+              ),
+              onPressed: _pickFromGallery,
+              icon: Icon(
+                Icons.photo_library_outlined,
+                color: primaryColor,
+                size: 24,
+              ),
+              label: const Text(
+                'Access from Gallery',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  fontFamily: 'SpaceGrotesk',
                 ),
-                _buildNavItem(
-                  icon: Icons.person_outline,
-                  isActive: false,
-                  onTap: () {},
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+
+
+        ],
       ),
     );
   }
@@ -238,110 +242,5 @@ class _QRScreenState extends State<QRScreen> with SingleTickerProviderStateMixin
     }
   }
 
-  Widget _buildNavItem({
-    required IconData icon,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: isActive 
-            ? const Color(0xFF06F81A) 
-            : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Icon(
-          icon,
-          color: isActive 
-            ? Colors.black
-            : Colors.white.withOpacity(0.7),
-          size: 24,
-        ),
-      ),
-    );
-  }
 
-  Widget _buildScannerButton(bool isActive) {
-    return Container(
-      width: 56,
-      height: 56,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF06F81A),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF06F81A).withOpacity(0.3),
-            blurRadius: 12,
-            spreadRadius: 2,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: const Icon(
-        Icons.qr_code_scanner,
-        color: Colors.black,
-        size: 28,
-      ),
-    );
-  }
-}
-
-// Add this custom painter for the scanner overlay
-class ScannerOverlay extends CustomPainter {
-  final Color borderColor;
-  final double borderRadius;
-  final double borderLength;
-  final double borderWidth;
-  final double cutOutSize;
-
-  ScannerOverlay({
-    required this.borderColor,
-    required this.borderRadius,
-    required this.borderLength,
-    required this.borderWidth,
-    required this.cutOutSize,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromCenter(
-      center: Offset(size.width / 2, size.height / 2),
-      width: cutOutSize,
-      height: cutOutSize,
-    );
-
-    final paint = Paint()
-      ..color = Colors.black.withOpacity(0.5)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawPath(
-      Path.combine(
-        PathOperation.difference,
-        Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
-        Path()
-          ..addRRect(
-            RRect.fromRectAndRadius(rect, Radius.circular(borderRadius)),
-          ),
-      ),
-      paint,
-    );
-
-    final borderPaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = borderWidth;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, Radius.circular(borderRadius)),
-      borderPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
