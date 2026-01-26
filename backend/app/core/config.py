@@ -14,13 +14,38 @@ class Settings(BaseSettings):
     
     # Server
     HOST: str = "0.0.0.0"
-    # Handle PORT - Render sets this, but handle empty string case
-    _port_str = os.getenv("PORT", "")
-    PORT: int = int(_port_str.strip()) if _port_str and _port_str.strip() else 8000
+    PORT: int = 8000  # Will be overridden in __init__
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"  # Default False in production
     PROJECT_NAME: str = "Virtue Try-On API"
     API_V1_STR: str = "/api/v1"
     CORS_ORIGINS: list = ["*"]  # Allow all origins in development
+    
+    def __init__(self, **kwargs):
+        """Initialize with manual PORT handling to avoid empty string validation error"""
+        # Remove PORT from kwargs if present (to handle manually)
+        port_env = os.getenv("PORT", "")
+        if 'PORT' in kwargs:
+            # If PORT is in kwargs but empty, remove it
+            if isinstance(kwargs['PORT'], str) and not kwargs['PORT'].strip():
+                del kwargs['PORT']
+            elif isinstance(kwargs['PORT'], str):
+                try:
+                    kwargs['PORT'] = int(kwargs['PORT'].strip())
+                except (ValueError, TypeError):
+                    del kwargs['PORT']
+        
+        super().__init__(**kwargs)
+        
+        # Set PORT manually after initialization
+        if port_env and port_env.strip():
+            try:
+                port_value = int(port_env.strip())
+            except (ValueError, TypeError):
+                port_value = 8000
+        else:
+            port_value = 8000
+        
+        object.__setattr__(self, 'PORT', port_value)
     
     @field_validator('DEBUG', mode='before')
     @classmethod
@@ -62,5 +87,6 @@ class Settings(BaseSettings):
         case_sensitive = False  # Allow case-insensitive env vars
         extra = "ignore"  # Ignore extra fields in .env file
         env_prefix = ""  # No prefix for env vars
+        env_ignore_empty = True  # Ignore empty environment variables
 
 settings = Settings()
