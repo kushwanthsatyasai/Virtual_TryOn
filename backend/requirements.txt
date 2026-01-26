@@ -35,7 +35,8 @@ torch>=2.0.0
 torchvision>=0.15.0
 
 # Person & Cloth Segmentation (U2-Net)
-rembg>=2.0.50
+# rembg requires onnxruntime backend
+rembg[cpu]>=2.0.50  # CPU version for server deployment
 
 # Pose Detection (MediaPipe)
 mediapipe>=0.10.8
