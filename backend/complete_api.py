@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 import uuid
 import os
 import shutil
+import sys
 
 # Import models and services
 from app.models.database import get_db, engine, Base
@@ -27,37 +28,65 @@ from app.services.auth_service import AuthService
 from app.services.size_recommendation_service import SizeRecommendationService
 from app.core.config import settings
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Create tables (with error handling for deployment)
+try:
+    Base.metadata.create_all(bind=engine)
+    print("✓ Database tables created/verified")
+except Exception as e:
+    print(f"⚠ Warning: Database initialization error: {e}")
+    print("App will continue but database features may not work.")
 
-# Initialize services (global)
+# Initialize services (global) - with error handling
 ai_service = None
-auth_service = AuthService()
-size_service = SizeRecommendationService()
+
+def get_ai_service():
+    """Lazy load AI service - only initialize when needed"""
+    global ai_service
+    if ai_service is None:
+        try:
+            print("Initializing AI Service (lazy load)...")
+            sys.stdout.flush()
+            ai_service = AIService()
+            print("✓ AI Service initialized")
+            sys.stdout.flush()
+        except Exception as e:
+            print(f"⚠ Warning: AI Service initialization failed: {e}")
+            sys.stdout.flush()
+            raise HTTPException(
+                status_code=503,
+                detail="AI Service is not available. Please try again later."
+            )
+    return ai_service
+
+try:
+    auth_service = AuthService()
+    size_service = SizeRecommendationService()
+except Exception as e:
+    print(f"⚠ Warning: Service initialization error: {e}")
+    auth_service = None
+    size_service = None
 
 # Lifespan event handler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup - FAST and non-blocking
     global ai_service
+    
+    # Create directories (fast operation)
     try:
-        # Create directories first
         os.makedirs("temp/uploads", exist_ok=True)
         os.makedirs("temp/results", exist_ok=True)
         os.makedirs("uploads/avatars", exist_ok=True)
         os.makedirs("uploads/wardrobe", exist_ok=True)
         os.makedirs("static/generated_outputs", exist_ok=True)
-        
-        # Initialize AI service (may fail but app should still start)
-        try:
-            ai_service = AIService()
-        except Exception as e:
-            print(f"Warning: AI Service initialization failed: {e}")
-            ai_service = None
-    except Exception as e:
-        print(f"Startup error: {e}")
-        import traceback
-        traceback.print_exc()
+    except:
+        pass  # Ignore errors, continue
+    
+    # Don't initialize AI service here - it's too slow
+    # Initialize it lazily when first needed
+    ai_service = None
+    
+    # Server is ready immediately
     yield
     # Shutdown (cleanup if needed)
 
@@ -283,7 +312,9 @@ async def create_tryon(
     # Generate try-on
     start_time = datetime.now()
     
-    success = await ai_service.generate_tryon(
+    # Lazy load AI service
+    ai = get_ai_service()
+    success = await ai.generate_tryon(
         user_image_path=person_path,
         cloth_image_path=cloth_path,
         output_path=result_path,

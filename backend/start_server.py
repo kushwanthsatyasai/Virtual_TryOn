@@ -29,24 +29,41 @@ try:
     print("✓ uvicorn imported")
     sys.stdout.flush()
     
-    # Import the app
+    # Import the app with detailed error handling
     print("Importing complete_api...")
     sys.stdout.flush()
-    from complete_api import app
-    print("✓ complete_api imported")
-    sys.stdout.flush()
+    try:
+        from complete_api import app
+        print("✓ complete_api imported")
+        sys.stdout.flush()
+        
+        # Verify app is valid
+        if app is None:
+            raise ValueError("App is None after import")
+        print(f"✓ App instance created: {type(app)}")
+        sys.stdout.flush()
+        
+    except Exception as import_error:
+        print(f"❌ ERROR importing app: {import_error}")
+        import traceback
+        traceback.print_exc()
+        sys.stdout.flush()
+        raise
     
     # Start the server
     print(f"Starting server on {HOST}:{PORT}...")
+    print(f"App ready, binding to port {PORT}...")
     sys.stdout.flush()
     
+    # Use exec to ensure proper signal handling
     uvicorn.run(
         app,
         host=HOST,
         port=PORT,
         workers=1,
         log_level="info",
-        access_log=True
+        access_log=True,
+        loop="asyncio"
     )
     
 except ImportError as e:
