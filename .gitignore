@@ -52,3 +52,12 @@ app.*.map.json
 .idea/
 .vscode/
 *.iml
+
+# Environment variables and secrets
+.env
+.env.*
+*.env
+
+# Jupyter Notebooks (may contain secrets)
+*.ipynb
+.ipynb_checkpoints/

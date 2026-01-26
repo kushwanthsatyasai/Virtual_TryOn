@@ -36,6 +36,11 @@ env/
 # Environment variables
 .env
 .env.local
+.env.*
+
+# Jupyter Notebooks (may contain secrets)
+*.ipynb
+.ipynb_checkpoints/
 
 # Test images and outputs
 test_images/
