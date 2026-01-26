@@ -50,21 +50,35 @@ try:
         sys.stdout.flush()
         raise
     
-    # Start the server
+    # Start the server - use uvicorn.run with explicit binding
     print(f"Starting server on {HOST}:{PORT}...")
     print(f"App ready, binding to port {PORT}...")
+    print(f"PORT environment variable: {os.environ.get('PORT', 'NOT SET')}")
     sys.stdout.flush()
     
-    # Use exec to ensure proper signal handling
-    uvicorn.run(
-        app,
-        host=HOST,
-        port=PORT,
-        workers=1,
-        log_level="info",
-        access_log=True,
-        loop="asyncio"
-    )
+    # CRITICAL: Use uvicorn.run() which properly binds to the port
+    # This must complete and stay running for Render to detect the port
+    print("=" * 60)
+    print("CALLING uvicorn.run() - Server should bind now")
+    print("=" * 60)
+    sys.stdout.flush()
+    
+    try:
+        uvicorn.run(
+            app,
+            host=HOST,
+            port=PORT,
+            workers=1,
+            log_level="info",
+            access_log=True,
+            loop="asyncio"
+        )
+    except Exception as run_error:
+        print(f"❌ ERROR in uvicorn.run(): {run_error}")
+        import traceback
+        traceback.print_exc()
+        sys.stdout.flush()
+        sys.exit(1)
     
 except ImportError as e:
     print(f"❌ IMPORT ERROR: {e}")

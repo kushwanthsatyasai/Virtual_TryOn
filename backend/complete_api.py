@@ -66,13 +66,13 @@ except Exception as e:
     auth_service = None
     size_service = None
 
-# Lifespan event handler
+# Lifespan event handler - MUST be fast and non-blocking
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup - FAST and non-blocking
+    # Startup - FAST and non-blocking (critical for Render port detection)
     global ai_service
     
-    # Create directories (fast operation)
+    # Create directories (fast operation, non-blocking)
     try:
         os.makedirs("temp/uploads", exist_ok=True)
         os.makedirs("temp/results", exist_ok=True)
@@ -82,11 +82,12 @@ async def lifespan(app: FastAPI):
     except:
         pass  # Ignore errors, continue
     
-    # Don't initialize AI service here - it's too slow
-    # Initialize it lazily when first needed
+    # Don't initialize AI service here - it's too slow and blocks startup
+    # Initialize it lazily when first needed via get_ai_service()
     ai_service = None
     
-    # Server is ready immediately
+    # Server is ready immediately - this allows port binding
+    # Render will detect the port once this yields
     yield
     # Shutdown (cleanup if needed)
 
