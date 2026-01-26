@@ -39,7 +39,7 @@ rembg>=2.0.50
 
 # Pose Detection (MediaPipe)
 mediapipe>=0.10.8
-opencv-python>=4.8.0
+opencv-python-headless>=4.8.0  # Headless version for servers (no GUI dependencies)
 
 # Virtual Try-On Model (IDM-VTON / Kolors)
 diffusers>=0.24.0
