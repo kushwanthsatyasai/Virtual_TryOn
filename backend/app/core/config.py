@@ -14,7 +14,9 @@ class Settings(BaseSettings):
     
     # Server
     HOST: str = "0.0.0.0"
-    PORT: int = int(os.getenv("PORT", 8000))  # Render sets PORT automatically
+    # Handle PORT - Render sets this, but handle empty string case
+    _port_str = os.getenv("PORT", "")
+    PORT: int = int(_port_str.strip()) if _port_str and _port_str.strip() else 8000
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"  # Default False in production
     PROJECT_NAME: str = "Virtue Try-On API"
     API_V1_STR: str = "/api/v1"

@@ -6,14 +6,20 @@ import os
 import sys
 
 # Get port from environment (Render automatically sets this)
-PORT = int(os.environ.get("PORT", 8000))
+# Handle empty string case (if PORT is set but empty)
+port_str = os.environ.get("PORT", "")
+if port_str and port_str.strip():
+    PORT = int(port_str.strip())
+else:
+    PORT = 8000  # Default fallback
 HOST = "0.0.0.0"
 
 print(f"=" * 60)
 print(f"Starting Virtue Try-On API")
 print(f"Host: {HOST}")
 print(f"Port: {PORT}")
-print(f"PORT env var: {os.environ.get('PORT', 'NOT SET')}")
+port_env = os.environ.get('PORT', 'NOT SET')
+print(f"PORT env var: {port_env} (using: {PORT})")
 print(f"=" * 60)
 sys.stdout.flush()
 
