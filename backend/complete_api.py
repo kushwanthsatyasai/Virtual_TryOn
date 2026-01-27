@@ -43,13 +43,6 @@ except Exception:
 # Don't import AIService at module level - it may crash during import
 # Import it lazily when needed
 
-# Create tables (with error handling for deployment)
-# Make this silent - don't print during import
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception:
-    pass  # Database will be created on first use if needed
-
 # Initialize services (global) - with error handling
 ai_service = None
 
@@ -106,8 +99,16 @@ async def lifespan(app: FastAPI):
         os.makedirs("uploads/avatars", exist_ok=True)
         os.makedirs("uploads/wardrobe", exist_ok=True)
         os.makedirs("static/generated_outputs", exist_ok=True)
-    except:
-        pass  # Ignore errors, continue
+    except Exception:
+        # Ignore directory errors; they can be created lazily later
+        pass
+
+    # Initialize database schema at startup (not at import time)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        # Do not block startup if DB init fails; log and continue
+        print(f"DB init skipped: {e}")
     
     # Don't initialize AI service here - it's too slow and blocks startup
     # Initialize it lazily when first needed via get_ai_service()
@@ -1413,9 +1414,11 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+    import os
+
     uvicorn.run(
-        app,
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG
+        "complete_api:app",
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 10000)),
+        log_level="info",
     )
