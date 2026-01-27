@@ -1,28 +1,53 @@
 """
-Database Configuration
-=====================
+Database Configuration (Render-safe)
+===================================
 """
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from app.core.config import settings
-
-# Create engine
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    echo=settings.DEBUG
-)
-
-# Session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+from sqlalchemy.orm import sessionmaker, declarative_base
+import os
 
 # Base class for models
 Base = declarative_base()
 
-# Dependency for FastAPI
+# Lazy globals
+_engine = None
+_SessionLocal = None
+
+
+def get_engine():
+    """
+    Create engine lazily to avoid import-time crashes on Render
+    """
+    global _engine, _SessionLocal
+
+    if _engine is None:
+        DATABASE_URL = os.getenv("DATABASE_URL")
+
+        if not DATABASE_URL:
+            raise RuntimeError("DATABASE_URL environment variable not set")
+
+        _engine = create_engine(
+            DATABASE_URL,
+            pool_pre_ping=True,
+            pool_recycle=300,
+            echo=False
+        )
+
+        _SessionLocal = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=_engine
+        )
+
+    return _engine
+
+
 def get_db():
-    db = SessionLocal()
+    """
+    FastAPI DB dependency
+    """
+    get_engine()
+    db = _SessionLocal()
     try:
         yield db
     finally:
