@@ -19,7 +19,10 @@ def test_auth():
             "email": "demo@example.com",
             "username": "demouser",
             "password": "Demo123456",
-            "full_name": "Demo User"
+            "full_name": "Demo User",
+            "age": 22,
+            "phone": "9999999999",
+            "gender": "male"
         }
         
         response = requests.post(f"{BASE_URL}/auth/register", json=register_data)

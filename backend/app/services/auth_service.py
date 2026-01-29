@@ -69,5 +69,8 @@ class AuthService:
         
         if not any(c.isdigit() for c in password):
             return False, "Password must contain at least one number"
+
+        if not any(not c.isalnum() for c in password):
+            return False, "Password must contain at least one special character"
         
         return True, "Password is valid"
