@@ -5,6 +5,9 @@ Startup script for Render - ensures proper port binding
 import os
 import sys
 
+# Suppress ONNX Runtime GPU discovery warning on headless servers (no GPU)
+os.environ.setdefault("ORT_LOG_LEVEL", "4")
+
 # Get port from environment (Render automatically sets this)
 # Handle empty string case (if PORT is set but empty)
 port_str = os.environ.get("PORT", "")

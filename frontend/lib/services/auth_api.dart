@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io';
 
 import 'api_client.dart';
 
@@ -28,7 +28,7 @@ class AuthApi {
   }
 
   static Future<String> uploadFullBodyPhoto({
-    required File photoFile,
+    required XFile photoFile,
     String? token,
   }) async {
     final accessToken = token ?? await getToken();
@@ -36,9 +36,27 @@ class AuthApi {
       throw Exception('Missing access token');
     }
 
-    final filename = photoFile.path.split(Platform.pathSeparator).last;
+    final filename = photoFile.name;
+    final bytes = await photoFile.readAsBytes();
+    return uploadFullBodyPhotoBytes(
+      bytes: bytes,
+      filename: filename,
+      token: accessToken,
+    );
+  }
+
+  static Future<String> uploadFullBodyPhotoBytes({
+    required List<int> bytes,
+    required String filename,
+    String? token,
+  }) async {
+    final accessToken = token ?? await getToken();
+    if (accessToken == null || accessToken.isEmpty) {
+      throw Exception('Missing access token');
+    }
+
     final form = FormData.fromMap({
-      'photo': await MultipartFile.fromFile(photoFile.path, filename: filename),
+      'photo': MultipartFile.fromBytes(bytes, filename: filename),
     });
 
     final Response res = await ApiClient.dio.post(

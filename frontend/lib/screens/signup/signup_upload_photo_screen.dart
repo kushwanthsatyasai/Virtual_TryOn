@@ -1,8 +1,9 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:io' show File;
 
 import '../../models/signup_draft.dart';
 import '../../services/auth_api.dart';
@@ -38,10 +39,25 @@ class _SignUpUploadPhotoScreenState extends State<SignUpUploadPhotoScreen> {
       final token = await AuthApi.register(widget.draft.toRegisterPayload());
 
       if (uploadPhoto && _picked != null) {
-        await AuthApi.uploadFullBodyPhoto(
-          photoFile: File(_picked!.path),
-          token: token,
-        );
+        // On web, use the picked file bytes directly; on mobile/desktop, compress first.
+        if (kIsWeb) {
+          await AuthApi.uploadFullBodyPhoto(photoFile: _picked!, token: token);
+        } else {
+          final compressed = await FlutterImageCompress.compressWithFile(
+            _picked!.path,
+            minWidth: 512,
+            minHeight: 512,
+            quality: 80,
+          );
+
+          final bytes = compressed ?? await _picked!.readAsBytes();
+
+          await AuthApi.uploadFullBodyPhotoBytes(
+            bytes: bytes,
+            filename: _picked!.name,
+            token: token,
+          );
+        }
       }
 
       if (!mounted) return;
@@ -128,9 +144,10 @@ class _SignUpUploadPhotoScreenState extends State<SignUpUploadPhotoScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            const Spacer(flex: 1),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+            const SizedBox(height: 24),
             const Text(
               'One last step...',
               style: TextStyle(
@@ -196,12 +213,19 @@ class _SignUpUploadPhotoScreenState extends State<SignUpUploadPhotoScreen> {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(20),
-                            child: Image.file(
-                              File(_picked!.path),
-                              height: 220,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                            ),
+                            child: kIsWeb
+                                ? Image.network(
+                                    _picked!.path,
+                                    height: 220,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Image.file(
+                                    File(_picked!.path),
+                                    height: 220,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                  ),
                           ),
                           const SizedBox(height: 12),
                           Text(
@@ -221,7 +245,7 @@ class _SignUpUploadPhotoScreenState extends State<SignUpUploadPhotoScreen> {
             _buildTip('Ensure your entire body is visible in the photo.'),
             const SizedBox(height: 8),
             _buildTip('Use a well-lit photo with a neutral background.'),
-            const Spacer(flex: 2),
+            const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -252,6 +276,7 @@ class _SignUpUploadPhotoScreenState extends State<SignUpUploadPhotoScreen> {
             ),
             const SizedBox(height: 16),
           ],
+        ),
         ),
       ),
     );

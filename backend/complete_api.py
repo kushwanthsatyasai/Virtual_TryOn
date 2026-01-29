@@ -3,6 +3,10 @@ COMPLETE VIRTUAL TRY-ON API
 ===========================
 All features: Auth, Try-On, History, Wardrobe, Social, Size Recommendations
 """
+import os
+
+# Suppress ONNX Runtime GPU discovery warning on headless servers (rembg uses ONNX)
+os.environ.setdefault("ORT_LOG_LEVEL", "4")
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -14,7 +18,6 @@ from typing import Optional, List
 from datetime import datetime
 from contextlib import asynccontextmanager
 import uuid
-import os
 from fastapi.staticfiles import StaticFiles
 
 # -------------------------
