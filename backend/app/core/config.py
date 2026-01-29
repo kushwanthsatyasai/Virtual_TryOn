@@ -5,7 +5,8 @@ from pydantic import field_validator
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql://username:password@localhost/virtue_tryon_db"
+    # Default to SQLite for local development, PostgreSQL for production (Render)
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./virtue_tryon.db")
     
     # JWT
     SECRET_KEY: str = "u0YJp3Nn9q7ZxA4fNQ2sLeH8wCkVt1mG5rSdIbXuP0FyDzahEc"
