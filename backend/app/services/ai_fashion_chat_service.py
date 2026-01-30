@@ -31,7 +31,7 @@ class AIFashionChatService:
     
     def __init__(
         self,
-        provider: str = "openai",  # openai, anthropic, ollama
+        provider: str = None,  # openai, anthropic, gemini, ollama
         model: str = None,
         api_key: str = None
     ):
@@ -39,12 +39,32 @@ class AIFashionChatService:
         Initialize the chat service.
         
         Args:
-            provider: LLM provider (openai, anthropic, ollama)
-            model: Model name (e.g., gpt-4, claude-3-sonnet)
-            api_key: API key for the provider
+            provider: LLM provider (openai, anthropic, gemini, ollama). If None, reads from AI_CHAT_PROVIDER env var.
+            model: Model name (e.g., gpt-4, claude-3-sonnet, gemini-pro)
+            api_key: API key for the provider. If None, reads from environment.
         """
+        # Get provider from env if not provided (Gemini only)
+        if provider is None:
+            provider = os.getenv("AI_CHAT_PROVIDER", "gemini")
+        
         self.provider = provider.lower()
-        self.api_key = api_key or os.getenv(f"{provider.upper()}_API_KEY")
+        
+        # Get API key from env if not provided
+        if api_key is None:
+            if self.provider == "gemini":
+                self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+            else:
+                # Try both uppercase and the exact provider name
+                env_key = f"{self.provider.upper()}_API_KEY"
+                self.api_key = os.getenv(env_key) or os.getenv(env_key.lower())
+        else:
+            self.api_key = api_key
+        
+        # Debug logging
+        if self.api_key:
+            logger.info(f"API key found for {self.provider}: {self.api_key[:10]}...")
+        else:
+            logger.warning(f"No API key found for {self.provider}. Check {self.provider.upper()}_API_KEY in .env")
         
         # Set default models
         if model is None:
@@ -52,8 +72,10 @@ class AIFashionChatService:
                 self.model = "gpt-4o-mini"  # Fast and cost-effective
             elif self.provider == "anthropic":
                 self.model = "claude-3-haiku-20240307"  # Fast and cost-effective
+            elif self.provider == "gemini":
+                self.model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
             elif self.provider == "ollama":
-                self.model = "llama2"  # Free local model
+                self.model = os.getenv("OLLAMA_MODEL", "llama3.2")  # Run: ollama run llama3.2
         else:
             self.model = model
         
@@ -66,12 +88,31 @@ class AIFashionChatService:
         """Initialize the LLM client based on provider."""
         try:
             if self.provider == "openai":
+                if not self.api_key:
+                    logger.warning("OPENAI_API_KEY not set. Chat service will not work.")
+                    return None
                 from openai import OpenAI
                 return OpenAI(api_key=self.api_key)
             
             elif self.provider == "anthropic":
+                if not self.api_key:
+                    logger.warning("ANTHROPIC_API_KEY not set. Chat service will not work.")
+                    return None
                 from anthropic import Anthropic
                 return Anthropic(api_key=self.api_key)
+            
+            elif self.provider == "gemini":
+                if not self.api_key:
+                    logger.warning("GEMINI_API_KEY not set. Chat service will not work.")
+                    return None
+                try:
+                    from google import genai
+                    # Client picks up GEMINI_API_KEY from env if api_key not passed
+                    client = genai.Client(api_key=self.api_key)
+                    return client
+                except ImportError as e:
+                    logger.error("google-genai not available: %s. Install with: pip install google-genai", e)
+                    return None
             
             elif self.provider == "ollama":
                 # Ollama runs locally, no API key needed
@@ -84,6 +125,9 @@ class AIFashionChatService:
         except ImportError as e:
             logger.error(f"Failed to import {self.provider} client: {e}")
             logger.info(f"Install with: pip install {self.provider}")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to initialize {self.provider} client: {e}")
             return None
     
     def chat(
@@ -128,6 +172,8 @@ class AIFashionChatService:
                 response = self._chat_openai(messages)
             elif self.provider == "anthropic":
                 response = self._chat_anthropic(messages)
+            elif self.provider == "gemini":
+                response = self._chat_gemini(messages)
             elif self.provider == "ollama":
                 response = self._chat_ollama(messages)
             else:
@@ -227,30 +273,85 @@ Be friendly, helpful, and professional. Provide specific, actionable advice.
             }
         }
     
+    def _chat_gemini(self, messages: List[Dict]) -> Dict:
+        """Chat with Google Gemini via new SDK: from google import genai, client.models.generate_content."""
+        from google.genai import types
+        
+        client = self.client
+        system_prompt = next((m["content"] for m in messages if m["role"] == "system"), "")
+        conversation = [m for m in messages if m["role"] != "system"]
+        user_message = conversation[-1]["content"] if conversation else ""
+        
+        config = types.GenerateContentConfig(
+            system_instruction=system_prompt or None,
+            max_output_tokens=500,
+            temperature=0.7,
+        )
+        response = client.models.generate_content(
+            model=self.model,
+            contents=user_message,
+            config=config,
+        )
+        
+        usage = getattr(response, "usage_metadata", None) or getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_token_count", None) or getattr(usage, "input_tokens", 0) if usage else 0
+        completion_tokens = getattr(usage, "candidates_token_count", None) or getattr(usage, "output_tokens", 0) if usage else 0
+        total_tokens = getattr(usage, "total_token_count", None) or (prompt_tokens + completion_tokens) if usage else 0
+        
+        return {
+            "response": response.text or "",
+            "model": self.model,
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+            },
+        }
+    
     def _chat_ollama(self, messages: List[Dict]) -> Dict:
-        """Chat with local Ollama models."""
+        """Chat with local Ollama models. Requires Ollama running (ollama serve)."""
         import requests
         
-        # Ollama API endpoint
-        url = "http://localhost:11434/api/chat"
-        
+        url = os.getenv("OLLAMA_HOST", "http://localhost:11434") + "/api/chat"
         payload = {
             "model": self.model,
             "messages": messages,
             "stream": False
         }
-        
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
+        try:
+            response = requests.post(url, json=payload, timeout=120)
+            response.raise_for_status()
+        except requests.exceptions.ConnectionError:
+            return {
+                "response": "Ollama is not running. Start it with: ollama serve",
+                "error": "Connection refused",
+                "model": self.model,
+                "usage": {}
+            }
+        except requests.exceptions.Timeout:
+            return {
+                "response": "Ollama request timed out. Try a smaller model or check Ollama.",
+                "error": "Timeout",
+                "model": self.model,
+                "usage": {}
+            }
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                return {
+                    "response": f"Model '{self.model}' not found. Run: ollama run {self.model}",
+                    "error": "Model not found",
+                    "model": self.model,
+                    "usage": {}
+                }
+            raise
         
         data = response.json()
-        
         return {
-            "response": data['message']['content'],
+            "response": data["message"]["content"],
             "model": self.model,
             "usage": {
-                "prompt_tokens": data.get('prompt_eval_count', 0),
-                "completion_tokens": data.get('eval_count', 0)
+                "prompt_tokens": data.get("prompt_eval_count", 0),
+                "completion_tokens": data.get("eval_count", 0)
             }
         }
     
@@ -465,9 +566,9 @@ def get_ai_fashion_chat_service(
     """Get or create AI fashion chat service instance."""
     global _chat_service
     
-    # Use environment variable or default to OpenAI
+    # Use environment variable or default to Gemini
     if provider is None:
-        provider = os.getenv("AI_CHAT_PROVIDER", "openai")
+        provider = os.getenv("AI_CHAT_PROVIDER", "gemini")
     
     if _chat_service is None:
         _chat_service = AIFashionChatService(provider=provider, model=model)

@@ -4,6 +4,10 @@ Startup script for Render - ensures proper port binding
 """
 import os
 import sys
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Suppress ONNX Runtime GPU discovery warning on headless servers (no GPU)
 os.environ.setdefault("ORT_LOG_LEVEL", "4")
