@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../../widgets/bottom_navigation_bar.dart';
+import '../../widgets/chat_fab_overlay.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -58,9 +59,11 @@ class _CartScreenState extends State<CartScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
+          Column(
+            children: [
+              Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: cartItems.length,
@@ -192,9 +195,12 @@ class _CartScreenState extends State<CartScreen> {
               ),
             ),
           ),
+            ],
+          ),
+          const ChatFabOverlay(),
         ],
       ),
-                           bottomNavigationBar: const CustomBottomNavigationBar(
+      bottomNavigationBar: const CustomBottomNavigationBar(
           currentIndex: 2,
         ),
     );

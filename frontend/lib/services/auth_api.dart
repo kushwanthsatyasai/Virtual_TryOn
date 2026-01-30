@@ -22,6 +22,27 @@ class AuthApi {
     return token;
   }
 
+  /// Login with email or username + password. Backend accepts both in "username" field.
+  static Future<String> login(String usernameOrEmail, String password) async {
+    final Response res = await ApiClient.dio.post(
+      '/auth/login',
+      data: {'username': usernameOrEmail.trim(), 'password': password},
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        sendTimeout: const Duration(seconds: 120),
+        receiveTimeout: const Duration(seconds: 120),
+      ),
+    );
+    final data = res.data as Map<String, dynamic>;
+    final token = data['access_token'] as String?;
+    if (token == null || token.isEmpty) {
+      throw Exception('Login succeeded but token missing');
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tokenKey, token);
+    return token;
+  }
+
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_tokenKey);
@@ -64,6 +85,8 @@ class AuthApi {
       data: form,
       options: Options(
         headers: {'Authorization': 'Bearer $accessToken'},
+        sendTimeout: const Duration(seconds: 120),
+        receiveTimeout: const Duration(seconds: 120),
       ),
     );
 

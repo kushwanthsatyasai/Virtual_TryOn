@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../product/product_detail_screen.dart';
+import '../../widgets/chat_fab_overlay.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -64,10 +65,12 @@ class _SearchScreenState extends State<SearchScreen> {
 
     return Scaffold(
       backgroundColor: darkGreenBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                // Header
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -274,8 +277,11 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ),
             ),
-          ],
-        ),
+              ],
+            ),
+          ),
+          const ChatFabOverlay(),
+        ],
       ),
     );
   }

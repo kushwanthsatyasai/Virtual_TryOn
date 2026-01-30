@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/chat_fab_overlay.dart';
+
 class ProductDetailScreen extends StatefulWidget {
   final ProductItem product;
   
@@ -42,9 +44,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: Column(
+      body: Stack(
         children: [
-          // Header with back and favorites buttons
+          Column(
+            children: [
+              // Header with back and favorites buttons
           Container(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -396,6 +400,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
             ),
           ),
+        ],
+      ),
+          const ChatFabOverlay(),
         ],
       ),
     );

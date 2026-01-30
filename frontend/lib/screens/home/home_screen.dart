@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../search/search_screen.dart';
 import '../../widgets/bottom_navigation_bar.dart';
+import '../../widgets/chat_fab_overlay.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -53,8 +54,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       
       // Body
-      body: SingleChildScrollView(
-        child: Column(
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Recent Looks Section
@@ -79,8 +82,11 @@ class _HomeScreenState extends State<HomeScreen> {
             
             // Popular Brands Section
             _buildBrandsSection(),
-          ],
-        ),
+            ],
+            ),
+          ),
+          const ChatFabOverlay(),
+        ],
       ),
 
       // Bottom Navigation Bar

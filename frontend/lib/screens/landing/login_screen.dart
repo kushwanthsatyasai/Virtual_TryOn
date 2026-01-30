@@ -1,10 +1,73 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import '../signup/signup_screen.dart';  // Correct import path
-import '../home/home_screen.dart'; // Import the HomeScreen
 import 'package:flutter_svg/flutter_svg.dart';
 
-class LoginScreen extends StatelessWidget {
+import '../../services/auth_api.dart';
+import '../home/home_screen.dart';
+import '../signup/signup_screen.dart';
+
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+
+    if (username.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter email or username')),
+      );
+      return;
+    }
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter password')),
+      );
+      return;
+    }
+
+    if (_loading) return;
+    setState(() => _loading = true);
+
+    try {
+      await AuthApi.login(username, password);
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        (route) => false,
+      );
+    } on DioException catch (e) {
+      final msg = e.response?.data is Map &&
+              (e.response?.data as Map)['detail'] != null
+          ? (e.response?.data as Map)['detail'].toString()
+          : (e.message ?? 'Sign in failed');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +101,6 @@ class LoginScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const SizedBox(height: 32),
-                    // Welcome text
                     const Text(
                       'Welcome Back',
                       style: TextStyle(
@@ -61,12 +123,12 @@ class LoginScreen extends StatelessWidget {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 32),
-                    // Email field
                     TextField(
+                      controller: _usernameController,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: surface,
-                        hintText: 'Email or phone number',
+                        hintText: 'Email or username',
                         hintStyle: const TextStyle(color: onSurfaceVariant),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -76,14 +138,17 @@ class LoginScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(color: primary),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 18, horizontal: 16),
                       ),
-                      style: const TextStyle(color: onSurface, fontFamily: 'SpaceGrotesk'),
+                      style: const TextStyle(
+                          color: onSurface, fontFamily: 'SpaceGrotesk'),
                       keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
                     ),
                     const SizedBox(height: 16),
-                    // Password field
                     TextField(
+                      controller: _passwordController,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: surface,
@@ -97,13 +162,16 @@ class LoginScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(color: primary),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 18, horizontal: 16),
                       ),
-                      style: const TextStyle(color: onSurface, fontFamily: 'SpaceGrotesk'),
+                      style: const TextStyle(
+                          color: onSurface, fontFamily: 'SpaceGrotesk'),
                       obscureText: true,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _signIn(),
                     ),
                     const SizedBox(height: 8),
-                    // Forgot password
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
@@ -120,7 +188,6 @@ class LoginScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    // Sign In button
                     SizedBox(
                       width: double.infinity,
                       height: 56,
@@ -137,14 +204,17 @@ class LoginScreen extends StatelessWidget {
                             fontFamily: 'SpaceGrotesk',
                           ),
                         ),
-                        onPressed: () {
-                          // TODO: Implement sign in logic
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const HomeScreen()),
-                          );
-                        },
-                        child: const Text('Sign In'),
+                        onPressed: _loading ? null : _signIn,
+                        child: _loading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.black,
+                                ),
+                              )
+                            : const Text('Sign In'),
                       ),
                     ),
                     const SizedBox(height: 24),

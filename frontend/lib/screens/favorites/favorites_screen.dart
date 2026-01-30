@@ -4,6 +4,7 @@ import '../cart/cart_screen.dart';
 import '../profile/profile_screen.dart';
 import '../qr/qr_screen.dart';
 import '../../widgets/bottom_navigation_bar.dart';
+import '../../widgets/chat_fab_overlay.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -33,19 +34,24 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           ),
         ),
       ),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.7,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: favoriteItems.length,
-        itemBuilder: (context, index) {
-          final item = favoriteItems[index];
-          return _buildFavoriteItem(item);
-        },
+      body: Stack(
+        children: [
+          GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.7,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+            ),
+            itemCount: favoriteItems.length,
+            itemBuilder: (context, index) {
+              final item = favoriteItems[index];
+              return _buildFavoriteItem(item);
+            },
+          ),
+          const ChatFabOverlay(),
+        ],
       ),
                            bottomNavigationBar: const CustomBottomNavigationBar(
                 currentIndex: 1,

@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:ui';
 
+import '../../widgets/chat_fab_overlay.dart';
+
 class QRScreen extends StatefulWidget {
   const QRScreen({super.key});
 
@@ -55,9 +57,11 @@ class _QRScreenState extends State<QRScreen> with SingleTickerProviderStateMixin
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: Column(
+      body: Stack(
         children: [
-          // Header - matches qr.html exactly
+          Column(
+            children: [
+              // Header - matches qr.html exactly
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -213,7 +217,9 @@ class _QRScreenState extends State<QRScreen> with SingleTickerProviderStateMixin
             ),
           ),
 
-
+            ],
+          ),
+          const ChatFabOverlay(),
         ],
       ),
     );
