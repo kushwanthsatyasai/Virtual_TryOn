@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../product/product_detail_screen.dart';
 import '../../widgets/chat_fab_overlay.dart';
+import '../../data/products_data.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -15,38 +16,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   final List<String> categories = ['All', 'Men', 'Women'];
   
-  final List<ProductItem> products = [
-    ProductItem(
-      name: 'Flowy Summer Dress',
-      price: 49.99,
-      imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAfo527qrKlgw7yTKR4jBJnJaKttmLid9gnoiBaxjWES0fa9zhU6QXJrqhp4FpmrBVthSI10HnqWVsFjk_yrUMkH9gKop-xdOrf-1k8BOa89PUgjwfcshLxien-JAjr--EFDmIMoPKAImObL7O_6_1WSDnMsrjMHaeK_qbLFS_fo1wDcvLbjWgs-5M2xpg2nV2DmPthOJCO5QQBdj4rw7LQ6g7YIF-doGpL3KbCwrC_qIt-M_-KAmAR8Vk8LMsXPLOpfWRWHEkXV_SN',
-    ),
-    ProductItem(
-      name: 'Classic Denim Jacket',
-      price: 79.99,
-      imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAVUM1j53lJxtcVrAnfU7E1fxsekFLz9wbm6uErCJwswWpbydcN2CAdB2XqSnkcYp7xb4AKE_9r8pLGsqm8jLrCVZNh1pUGYR67OednD9AhotEOa3k_AOTw4ojQhY8Db7SU8MKUJILSu0DYbtOlmU9rICf36kL1jYX6JAoZ6cTlpTyTaAHNYplrK9W1SSGyUcpMncemnSrKkFWSU0Gg5GlWTzlCbNUkUAQdhqI2XJz_KjpCaNtD2CEHH_9cuAs0R8mRBF5waWbJxSQp',
-    ),
-    ProductItem(
-      name: 'High-Waisted Jeans',
-      price: 69.99,
-      imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC2Bh_DSKJqHNlh9BQ5QYlt_6pZB-oDbT735kQrlkmn_M5ikem5IPBM6PsH2RhEBcWwxq5TT-vleUNTO7m4MywbY9vHgEp5RBj3FcU-nrkIAnixsER9_e-0q21TgKrcHwzdsGpSDcTuGK0u-na_9P78X0JyEbxUjaQv7xzB-zwJZIVjtWZ9Ck2CQYJedBG2OUIu_IoTjMh8Yb0MCGRNBFrakv1LPOCdnZXfSFdybq0rW_5kb_CiOcv8VShJ7KTlQeDgGBIDBHGYg8yX',
-    ),
-    ProductItem(
-      name: 'Silk Blouse',
-      price: 59.99,
-      imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDoDn9EoFeew3O6YPaWCBSjcA9ZFwG9dWtbmCRcTyvXzICShRiVLSib8npXClBcBZ-j9HSQvvwsqE_IfWgYn1WOfkYUF-heVxoJHuL_MdLGw2tKqn5H5Q0eeqD-nWlsKlbB6kIgqcmRXkaaEKbhd5XZYxQAbJGSfPoNzH2P9bq94OB7j87WYA_wQ1cQGkWbcPjgwcGjgl1hoik09tOfqbC6sIohY4wO3YbkI7caRmffQ_sDJlu6ikssomARHIamqwsN06VequiZd5lT',
-    ),
-    ProductItem(
-      name: 'Leather Skirt',
-      price: 89.99,
-      imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuApjodMAioxRWhGkCRdtsMuHiMOH-GH6kBidLllL4jaOi0V5FozqXEro35gAr9-hZS5r2B_gPwu1n0u_SlNCwh7p7mRyejpK0EXFH0riD51P0ylCr1aVtkulzO6VmaFZSgaQe1Z16zf2XPum2VoOflm5SVTIa-B8dYIU2M3vzArdS30a6yfgRUPGFnXioz2oLkBEd4hOgq5CQI7NUjanm6K6IzFZitu03Gp87hHEV7-M8q2xPYr4ABWNPnuN3oIgkIAWykyxwPyvCXl',
-    ),
-    ProductItem(
-      name: 'Cashmere Sweater',
-      price: 129.99,
-      imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7VcMNO8hTijuB88n_Qy_TxgvlhFqT5w7S5Hu9gHFcgsnQG4g8_p8FxbkX-3PoWYGRChLA8TAe_1KxJe-LddxpBinzC3Gp-LMrjZOAABEnNnYCAtwmDyri0kZPVAElDIUwawqeH-co1sc-KfCNxF9kOmAp9bZnZBfWMdjHYyQauzWEm1tAVtbvot36LhOxHHxvomjNhJxRghY6P4Dqvbfz8gMF4BBzPMnaAJ1IjduQCwV-Jj67b_IVRaGemiPIgEu3HfXFm8on6bSb',
-    ),
-  ];
+  List<ProductItem> get products => allProducts;
 
   @override
   void dispose() {
@@ -292,7 +262,10 @@ class _SearchScreenState extends State<SearchScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ProductDetailScreen(product: product),
+            builder: (context) => ProductDetailScreen(
+              product: product,
+              productImages: [product.imageUrl],
+            ),
           ),
         );
       },
@@ -308,22 +281,30 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  product.imageUrl,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Center(
-                      child: CircularProgressIndicator(
-                        color: const Color(0xFF06f906),
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                            : null,
+                child: product.imageUrl.startsWith('http')
+                    ? Image.network(
+                        product.imageUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: const Color(0xFF06f906),
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                      )
+                    : Image.asset(
+                        product.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(Icons.image_not_supported, color: Color(0xFF06f906), size: 40),
+                        ),
                       ),
-                    );
-                  },
-                ),
               ),
             ),
           ),

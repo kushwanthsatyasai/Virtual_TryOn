@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import '../cart/cart_screen.dart';
-import '../profile/profile_screen.dart';
-import '../qr/qr_screen.dart';
+import '../product/product_detail_screen.dart'; // ProductItem
 import '../../widgets/bottom_navigation_bar.dart';
 import '../../widgets/chat_fab_overlay.dart';
+import '../../services/favorites_cart_store.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -17,7 +16,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   Widget build(BuildContext context) {
     const backgroundColor = Color(0xFF121212);
-    const primaryColor = Color(0xFF06F81A);
+    final items = FavoritesCartStore.favorites;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -36,142 +35,155 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       ),
       body: Stack(
         children: [
-          GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.7,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-            ),
-            itemCount: favoriteItems.length,
-            itemBuilder: (context, index) {
-              final item = favoriteItems[index];
-              return _buildFavoriteItem(item);
-            },
-          ),
+          items.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No favorites yet.\nAdd items from product details.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFFA0A0A0),
+                      fontSize: 16,
+                      fontFamily: 'SpaceGrotesk',
+                    ),
+                  ),
+                )
+              : GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.7,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return _buildFavoriteItem(item, index);
+                  },
+                ),
           const ChatFabOverlay(),
         ],
       ),
-                           bottomNavigationBar: const CustomBottomNavigationBar(
-                currentIndex: 1,
-              ),
+      bottomNavigationBar: const CustomBottomNavigationBar(
+        currentIndex: 1,
+      ),
     );
   }
 
-
-
-  Widget _buildFavoriteItem(FavoriteItem item) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  item.imageUrl,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Center(
-                      child: CircularProgressIndicator(
-                        color: const Color(0xFF06F81A),
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                            : null,
+  Widget _buildFavoriteItem(FavoriteItem item, int index) {
+    return GestureDetector(
+      onTap: () {
+        final product = ProductItem(
+          name: item.name,
+          price: item.price,
+          imageUrl: item.imageUrl,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailScreen(
+              product: product,
+              productImages: [item.imageUrl],
+            ),
+          ),
+        ).then((_) => setState(() {}));
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: item.imageUrl.startsWith('http')
+                      ? Image.network(
+                          item.imageUrl,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                color: const Color(0xFF06F81A),
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                        loadingProgress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            );
+                          },
+                          errorBuilder: (_, __, ___) => Container(
+                            color: const Color(0xFF1E1E1E),
+                            child: const Icon(
+                              Icons.image_not_supported,
+                              color: Color(0xFFA0A0A0),
+                              size: 40,
+                            ),
+                          ),
+                        )
+                      : Image.asset(
+                          item.imageUrl,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: const Color(0xFF1E1E1E),
+                            child: const Icon(
+                              Icons.image_not_supported,
+                              color: Color(0xFFA0A0A0),
+                              size: 40,
+                            ),
+                          ),
+                        ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: () {
+                      FavoritesCartStore.removeFavoriteAt(index);
+                      setState(() {});
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
                       ),
-                    );
-                  },
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.favorite,
-                    color: Color(0xFF06F81A),
-                    size: 20,
+                      child: const Icon(
+                        Icons.favorite,
+                        color: Color(0xFF06F81A),
+                        size: 20,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          item.name,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            fontFamily: 'SpaceGrotesk',
+          const SizedBox(height: 8),
+          Text(
+            item.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'SpaceGrotesk',
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '₹${item.price.toStringAsFixed(2)}',
-          style: const TextStyle(
-            color: Color(0xFFA0A0A0),
-            fontSize: 14,
-            fontFamily: 'SpaceGrotesk',
+          const SizedBox(height: 4),
+          Text(
+            '₹${item.price.toStringAsFixed(2)}',
+            style: const TextStyle(
+              color: Color(0xFFA0A0A0),
+              fontSize: 14,
+              fontFamily: 'SpaceGrotesk',
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
-
-class FavoriteItem {
-  final String name;
-  final double price;
-  final String imageUrl;
-
-  const FavoriteItem({
-    required this.name,
-    required this.price,
-    required this.imageUrl,
-  });
-}
-
-final List<FavoriteItem> favoriteItems = [
-  FavoriteItem(
-    name: 'Cyber Goth Jacket',
-    price: 250.00,
-    imageUrl: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?q=80&w=735&auto=format&fit=crop',
-  ),
-  FavoriteItem(
-    name: 'Techwear Pants',
-    price: 180.00,
-    imageUrl: 'https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=687&auto=format&fit=crop',
-  ),
-  FavoriteItem(
-    name: 'Holographic Top',
-    price: 95.00,
-    imageUrl: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=662&auto=format&fit=crop',
-  ),
-  FavoriteItem(
-    name: 'LED Sneakers',
-    price: 320.00,
-    imageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=1470&auto=format&fit=crop',
-  ),
-  FavoriteItem(
-    name: 'Reflective Jacket',
-    price: 150.00,
-    imageUrl: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=736&auto=format&fit=crop',
-  ),
-  FavoriteItem(
-    name: 'Designer Shades',
-    price: 80.00,
-    imageUrl: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?q=80&w=880&auto=format&fit=crop',
-  ),
-];

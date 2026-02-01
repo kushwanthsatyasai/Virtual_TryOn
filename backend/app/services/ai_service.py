@@ -46,20 +46,22 @@ except ImportError:
     MEDIAPIPE_AVAILABLE = False
     print("[WARNING] MediaPipe not installed")
 
-# Diffusion models
-try:
-    from diffusers import AutoPipelineForText2Image
-    from diffusers.utils import load_image
-    DIFFUSERS_AVAILABLE = True
-except ImportError:
-    DIFFUSERS_AVAILABLE = False
-    print("[WARNING] Diffusers not installed")
-
 from ..core.config import settings
+
+# Avoid importing diffusers/torch when using Gradio Space (prevents 500 on login/auth)
+if getattr(settings, 'USE_GRADIO_SPACE', True):
+    DIFFUSERS_AVAILABLE = False
+else:
+    try:
+        from diffusers import AutoPipelineForText2Image
+        from diffusers.utils import load_image
+        DIFFUSERS_AVAILABLE = True
+    except ImportError:
+        DIFFUSERS_AVAILABLE = False
+        print("[WARNING] Diffusers not installed")
 
 logger = logging.getLogger(__name__)
 
-# Check if we should use Gradio Space instead of local models
 if getattr(settings, 'USE_GRADIO_SPACE', False):
     from .gradio_vton_service import GradioVTONService
 
@@ -119,6 +121,8 @@ class AIService:
                     output_path=output_path,
                     session_id=session_id
                 )
+        except RuntimeError:
+            raise
         except Exception as e:
             logger.error(f"Error in generate_tryon: {e}")
             import traceback

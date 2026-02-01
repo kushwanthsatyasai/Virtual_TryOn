@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
-import 'screens/landing/splash_screen1.dart';  // Update import path
 
-void main() {
+import 'screens/landing/splash_screen1.dart';
+import 'services/favorites_cart_store.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await FavoritesCartStore.loadFromDisk();
   runApp(const MyApp());
 }
 

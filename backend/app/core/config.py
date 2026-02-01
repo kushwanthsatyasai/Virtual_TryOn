@@ -75,7 +75,8 @@ class Settings(BaseSettings):
     HF_TOKEN: Optional[str] = None
     
     # Gradio Space Configuration (for API-based VTO)
-    GRADIO_SPACE_NAME: str = "frogleo/AI-Clothes-Changer"
+    # yisol/IDM-VTON = /tryon API (working). frogleo = /infer (fallback if set and yisol fails)
+    GRADIO_SPACE_NAME: str = "yisol/IDM-VTON"
     USE_GRADIO_SPACE: bool = True  # Set to False to use local models
     VTON_DENOISE_STEPS: int = 30  # Higher = better quality, slower
     VTON_SEED: int = 42  # For reproducibility

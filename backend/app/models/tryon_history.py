@@ -25,6 +25,9 @@ class TryOnHistory(Base):
     processing_time = Column(Float, nullable=True)  # seconds
     denoise_steps = Column(Integer, nullable=True)
     
+    # Product link (for "recent look" -> product detail)
+    metadata_ = Column("metadata", JSON, nullable=True)  # {product_id, product_name, product_image_url}
+
     # Metadata
     cloth_type = Column(String, nullable=True)  # shirt, dress, jacket, etc.
     cloth_color = Column(String, nullable=True)

@@ -40,7 +40,7 @@ print(f"✓ AI_CHAT_PROVIDER: {provider}")
 # Suppress ONNX Runtime GPU discovery warning on headless servers (rembg uses ONNX)
 os.environ.setdefault("ORT_LOG_LEVEL", "4")
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, status
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, status, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import or_
@@ -129,6 +129,25 @@ async def lifespan(app: FastAPI):
     ]:
         os.makedirs(path, exist_ok=True)
 
+    # Ensure tryon_history.metadata column exists (e.g. existing PostgreSQL DB)
+    try:
+        from sqlalchemy import text
+        from app.models.database import get_engine
+        engine = get_engine()
+        url = str(engine.url)
+        with engine.begin() as conn:
+            if "postgresql" in url or "postgres" in url:
+                conn.execute(text("ALTER TABLE tryon_history ADD COLUMN IF NOT EXISTS metadata JSONB"))
+            else:
+                try:
+                    conn.execute(text("ALTER TABLE tryon_history ADD COLUMN metadata TEXT"))
+                except Exception as col_err:
+                    if "duplicate column" not in str(col_err).lower() and "already exists" not in str(col_err).lower():
+                        raise
+        print("✓ tryon_history.metadata column ensured")
+    except Exception as e:
+        print(f"⚠ Migration tryon_history.metadata: {e}")
+
     # ❌ DO NOT run create_all on Render
     yield
     print("🛑 App shutdown")
@@ -145,7 +164,10 @@ app = FastAPI(
 
 # Ensure upload dirs exist before mounting static routes (StaticFiles requires existing dirs)
 os.makedirs("uploads/avatars", exist_ok=True)
+os.makedirs("temp/results", exist_ok=True)
+os.makedirs("temp/uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/temp", StaticFiles(directory="temp"), name="temp")
 
 app.add_middleware(
     CORSMiddleware,
@@ -219,6 +241,42 @@ class UserResponse(BaseModel):
     age: Optional[int] = None
     phone: Optional[str] = None
     gender: Optional[str] = None
+
+
+class UserProfileResponse(BaseModel):
+    """Full profile for /api/v1/users/me (includes measurements and avatar)."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    email: str
+    username: str
+    full_name: Optional[str] = None
+    age: Optional[int] = None
+    phone: Optional[str] = None
+    gender: Optional[str] = None
+    avatar_url: Optional[str] = None
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    chest_cm: Optional[float] = None
+    waist_cm: Optional[float] = None
+    hip_cm: Optional[float] = None
+    shoulder_width_cm: Optional[float] = None
+    preferred_size: Optional[str] = None
+
+
+class UserUpdate(BaseModel):
+    """Update profile (all optional, no password)."""
+    model_config = ConfigDict(extra="ignore")
+    full_name: Optional[str] = Field(default=None, validation_alias=AliasChoices("full_name", "name"))
+    age: Optional[int] = None
+    phone: Optional[str] = Field(default=None, validation_alias=AliasChoices("phone", "phone_number", "phoneNumber"))
+    gender: Optional[str] = None
+    height_cm: Optional[float] = Field(default=None, validation_alias=AliasChoices("height_cm", "heightCm"))
+    weight_kg: Optional[float] = Field(default=None, validation_alias=AliasChoices("weight_kg", "weightKg"))
+    chest_cm: Optional[float] = Field(default=None, validation_alias=AliasChoices("chest_cm", "chestCm"))
+    waist_cm: Optional[float] = Field(default=None, validation_alias=AliasChoices("waist_cm", "waistCm"))
+    hip_cm: Optional[float] = Field(default=None, validation_alias=AliasChoices("hip_cm", "hipCm"))
+    shoulder_width_cm: Optional[float] = None
+    preferred_size: Optional[str] = None
 
 
 class Token(BaseModel):
@@ -343,6 +401,46 @@ async def login_simple(
 
 
 # =========================
+# CURRENT USER PROFILE (GET / PATCH)
+# =========================
+async def _get_current_user_profile_impl(current_user: user_model.User):
+    """Return the authenticated user's full profile (including measurements)."""
+    return UserProfileResponse.model_validate(current_user)
+
+
+@app.get("/api/v1/users/me", response_model=UserProfileResponse, tags=["Profile"])
+async def get_current_user_profile(
+    current_user: user_model.User = Depends(get_current_user),
+):
+    return await _get_current_user_profile_impl(current_user)
+
+
+@app.get("/api/v1/profile/me", response_model=UserProfileResponse, tags=["Profile"])
+async def get_current_user_profile_alias(
+    current_user: user_model.User = Depends(get_current_user),
+):
+    """Alias for GET /api/v1/users/me (same response)."""
+    return await _get_current_user_profile_impl(current_user)
+
+
+@app.patch("/api/v1/users/me", response_model=UserProfileResponse, tags=["Profile"])
+async def update_current_user_profile(
+    payload: UserUpdate,
+    current_user: user_model.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update the authenticated user's profile. Only provided fields are updated."""
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        if hasattr(current_user, key):
+            setattr(current_user, key, value)
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return UserProfileResponse.model_validate(current_user)
+
+
+# =========================
 # PROFILE / ONBOARDING
 # =========================
 @app.post("/api/v1/profile/full-body-photo")
@@ -385,6 +483,9 @@ async def upload_full_body_photo(
 async def create_tryon(
     person: UploadFile = File(...),
     cloth: UploadFile = File(...),
+    product_id: Optional[str] = Form(None),
+    product_name: Optional[str] = Form(None),
+    product_image_url: Optional[str] = Form(None),
     current_user: user_model.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -400,22 +501,87 @@ async def create_tryon(
         f.write(await cloth.read())
 
     ai = get_ai_service()
-    success = await ai.generate_tryon(
-        person_path, cloth_path, result_path, result_id
-    )
+    try:
+        success = await ai.generate_tryon(
+            person_path, cloth_path, result_path, result_id
+        )
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    except Exception as e:
+        raise HTTPException(503, "Try-on service temporarily unavailable. Please try again later.")
 
     if not success:
-        raise HTTPException(500, "Try-on failed")
+        raise HTTPException(503, "Try-on service temporarily unavailable. Please try again later.")
+
+    metadata = None
+    if product_id or product_name or product_image_url:
+        metadata = {
+            k: v for k, v in [
+                ("product_id", product_id),
+                ("product_name", product_name),
+                ("product_image_url", product_image_url),
+            ] if v
+        }
+
+    # Ensure result file exists (saved by ai.generate_tryon to result_path)
+    if not os.path.isfile(result_path):
+        raise HTTPException(503, "Try-on output was not saved. Please try again.")
 
     history = history_model.TryOnHistory(
         user_id=current_user.id,
-        result_image_url=result_path
+        person_image_url=person_path,
+        cloth_image_url=cloth_path,
+        result_image_url=result_path,
+        metadata_=metadata,
     )
 
     db.add(history)
     db.commit()
+    db.refresh(history)
 
-    return {"success": True, "result": result_path}
+    # result_url: path with leading slash for display (frontend uses baseUrl + result_url)
+    result_url = f"/{result_path}" if not result_path.startswith("/") else result_path
+    return {
+        "success": True,
+        "result": result_path,
+        "result_url": result_url,
+        "history_id": history.id,
+        "output_saved": True,
+    }
+
+
+# =========================
+# TRY-ON HISTORY (for Recent Looks)
+# =========================
+@app.get("/api/v1/try-on/history")
+async def get_tryon_history(
+    skip: int = 0,
+    limit: int = 20,
+    current_user: user_model.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List current user's try-on history (for Recent Looks on home)."""
+    rows = (
+        db.query(history_model.TryOnHistory)
+        .filter(history_model.TryOnHistory.user_id == current_user.id)
+        .order_by(history_model.TryOnHistory.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    out = []
+    for r in rows:
+        # Return paths relative to API base so frontend can use its configured base URL
+        result_path = r.result_image_url if (r.result_image_url or "").startswith("http") else f"/{r.result_image_url}"
+        cloth_path = (r.cloth_image_url if (r.cloth_image_url or "").startswith("http") else f"/{r.cloth_image_url}") if r.cloth_image_url else None
+        out.append({
+            "id": r.id,
+            "result_image_url": result_path,
+            "cloth_image_url": cloth_path,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "metadata": r.metadata_ or {},
+        })
+    return {"items": out}
 
 
 # =========================
@@ -425,6 +591,7 @@ async def create_tryon(
 async def recommend_size(
     image: UploadFile = File(...),
     user_height_cm: Optional[float] = None,
+    garment_type: Optional[str] = Query("shirt"),
     current_user: user_model.User = Depends(get_current_user)
 ):
     service = get_size_service()
@@ -436,11 +603,46 @@ async def recommend_size(
     try:
         measurements = service.estimate_measurements_from_image(
             temp_path,
-            user_height_cm or current_user.height_cm
+            user_height_cm or getattr(current_user, "height_cm", None)
         )
-        return measurements
+        rec = service.recommend_size(measurements, garment_type=garment_type or "shirt", gender="unisex")
+        return {
+            "measurements": measurements,
+            "recommended_size": rec["recommended_size"],
+            "confidence": rec["confidence"],
+            "fit_notes": rec.get("fit_notes", ""),
+        }
     finally:
-        os.remove(temp_path)
+        if os.path.isfile(temp_path):
+            os.remove(temp_path)
+
+
+@app.get("/api/v1/size/recommend")
+async def recommend_size_from_profile(
+    garment_type: Optional[str] = Query("shirt"),
+    current_user: user_model.User = Depends(get_current_user),
+):
+    """Get AI size recommendation using the current user's profile (full-body) photo. Requires avatar_url set."""
+    avatar_url = getattr(current_user, "avatar_url", None) or ""
+    if not avatar_url or not avatar_url.strip():
+        raise HTTPException(400, "Upload a full-body photo in Profile to get AI size recommendation.")
+    # Resolve path: avatar_url may be like /uploads/avatars/xxx.png
+    path = avatar_url.lstrip("/").replace("\\", "/")
+    if not path.startswith("uploads/"):
+        path = f"uploads/avatars/{path.split('/')[-1]}" if "/" in path else f"uploads/avatars/{path}"
+    if not os.path.isfile(path):
+        raise HTTPException(400, "Profile photo not found. Please upload a full-body photo in Profile.")
+    service = get_size_service()
+    measurements = service.estimate_measurements_from_image(
+        path,
+        getattr(current_user, "height_cm", None),
+    )
+    rec = service.recommend_size(measurements, garment_type=garment_type or "shirt", gender="unisex")
+    return {
+        "recommended_size": rec["recommended_size"],
+        "confidence": rec["confidence"],
+        "fit_notes": rec.get("fit_notes", ""),
+    }
 
 
 # =========================

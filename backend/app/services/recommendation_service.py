@@ -691,15 +691,35 @@ class RecommendationEngine:
         
         return tried
     
+    # Catalog aligned with frontend allProducts (name used for matching)
+    _PRODUCT_CATALOG = [
+        {"id": "balmain-shirt", "name": "Balmain Paris Baroque Print Shirt", "category": "top", "price": 3049.00, "image_url": "assets/images/Balmain Paris Shirt.jpg"},
+        {"id": "balmain-sweater", "name": "Balmain Monogram Knit Sweater", "category": "top", "price": 429.00, "image_url": "assets/images/Balmain_Tshirt.jpg"},
+        {"id": "blazer", "name": "Navy Blue Tailored Blazer", "category": "outerwear", "price": 279.00, "image_url": "assets/images/Blazer.jpg"},
+        {"id": "flowing-shirt", "name": "Soft Washed Blue Button-Up Shirt", "category": "top", "price": 79.00, "image_url": "assets/images/Flowing Shirt.jpg"},
+        {"id": "hoodie", "name": "Soho NYC Athletics Hoodie", "category": "outerwear", "price": 69.00, "image_url": "assets/images/Hoodie H&M.jpg"},
+        {"id": "jeans", "name": "Light Wash Wide-Leg Denim Jeans", "category": "bottom", "price": 89.00, "image_url": "assets/images/Loose Jeans.jpg"},
+        {"id": "suede-jacket", "name": "Mint Green Corduroy Trucker Jacket", "category": "outerwear", "price": 149.00, "image_url": "assets/images/Suede Jacket.jpeg"},
+        {"id": "zara-shirt", "name": "State Park Striped Overshirt", "category": "top", "price": 99.00, "image_url": "assets/images/ZARA_Shirt.jpg"},
+        {"id": "zara-sweater", "name": "Oatmeal Ribbed Crewneck Sweater", "category": "top", "price": 119.00, "image_url": "assets/images/Zara_Sweater.jpg"},
+        {"id": "zara-tshirt", "name": "Classic Burgundy Crew Neck T-Shirt", "category": "top", "price": 49.00, "image_url": "assets/images/ZARA_Tshirt.jpg"},
+        {"id": "coat", "name": "Light Green Suede Trucker Jacket", "category": "outerwear", "price": 189.00, "image_url": "assets/images/Coat.png"},
+        {"id": "stussy-tshirt", "name": "Black Stüssy Logo T-Shirt", "category": "top", "price": 59.00, "image_url": "assets/images/Tshirt_Web.jpg"},
+    ]
+
     def _get_item_details(self, item_id: str) -> Optional[Dict]:
-        """Get item details by ID (mock implementation)"""
-        # In production, query your product database
-        mock_database = {
-            "item_001": {"id": "item_001", "name": "Classic T-Shirt", "category": "top", "price": 29.99, "brand": "Nike", "image": "/static/items/001.jpg"},
-            "item_002": {"id": "item_002", "name": "Denim Jeans", "category": "bottom", "price": 79.99, "brand": "Levi's", "image": "/static/items/002.jpg"},
-            # Add more items...
-        }
-        return mock_database.get(item_id)
+        """Get item details by ID; uses product catalog aligned with frontend."""
+        by_id = {p["id"]: p for p in self._PRODUCT_CATALOG}
+        if item_id in by_id:
+            out = dict(by_id[item_id])
+            out.setdefault("image", out.get("image_url", ""))
+            return out
+        by_name = {p["name"]: p for p in self._PRODUCT_CATALOG}
+        if item_id in by_name:
+            out = dict(by_name[item_id])
+            out.setdefault("image", out.get("image_url", ""))
+            return out
+        return None
     
     def _generate_reason(self, user_id: int, item_id: str) -> str:
         """Generate human-readable reason for recommendation"""
