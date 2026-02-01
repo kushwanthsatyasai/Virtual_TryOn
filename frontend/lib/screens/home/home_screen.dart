@@ -80,15 +80,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Container(color: Colors.transparent),
           ),
         ),
-        title: const Text(
-          'VIRTUE',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            letterSpacing: -1,
-            color: textPrimary,
-            fontFamily: 'SpaceGrotesk',
-          ),
+        title: Image.asset(
+          'assets/icons/app_logo.png',
+          height: 32,
+          fit: BoxFit.contain,
         ),
         actions: [
           IconButton(

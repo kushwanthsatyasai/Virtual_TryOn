@@ -39,6 +39,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
 
@@ -60,6 +61,20 @@ flutter:
     - assets/images/
     - assets/fonts/
     - assets/icons/
+
+# App launcher icon (home screen / app drawer) - generated from app_logo.png
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true  # Required for Apple App Store
+  web:
+    generate: true
+    imageUrl: "/icons/Icon-192.png"
+    backgroundColor: "#1a1a2e"
+    themeColor: "#ffffff"
+  image_path: "assets/icons/app_logo.png"
+  adaptive_icon_background: "#1a1a2e"
+  adaptive_icon_foreground: "assets/icons/app_logo.png"
 
 # flutter_web_plugins:
 #   pluginClass: QrScannerPlugin

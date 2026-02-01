@@ -68,6 +68,12 @@ class _SplashScreenState extends State<SplashScreen> {
               child: Column(
                 children: [
                   const Spacer(),
+                  Image.asset(
+                    'assets/icons/app_logo.png',
+                    height: 120,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 24),
                   Text.rich(
                     TextSpan(
                       children: [
