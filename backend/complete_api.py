@@ -28,6 +28,10 @@ if not env_loaded:
     # Fallback: try loading from current directory
     load_dotenv(override=True)
 
+# Cloudinary: optional; when set, try-on results are uploaded for persistent URLs (Render / mobile)
+if os.getenv("CLOUDINARY_URL"):
+    print("✓ CLOUDINARY_URL set — try-on results will be stored in Cloudinary")
+
 # AI chat: Gemini only (new SDK: from google import genai)
 provider = os.getenv("AI_CHAT_PROVIDER", "gemini")
 gemini_key = os.getenv("GEMINI_API_KEY")
@@ -51,6 +55,27 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 import uuid
 from fastapi.staticfiles import StaticFiles
+
+# Optional: Cloudinary for persistent try-on result URLs (Render / mobile)
+def _upload_result_to_cloudinary(local_path: str, public_id: str) -> Optional[str]:
+    """Upload a local file to Cloudinary; return secure_url or None if not configured/fails."""
+    url = os.getenv("CLOUDINARY_URL")
+    if not url or not url.strip():
+        return None
+    try:
+        import cloudinary
+        import cloudinary.uploader
+        cloudinary.config(cloudinary_url=url)
+        r = cloudinary.uploader.upload(
+            local_path,
+            folder="virtue-tryon",
+            public_id=public_id,
+            overwrite=True,
+        )
+        return r.get("secure_url")
+    except Exception as e:
+        print(f"⚠ Cloudinary upload failed: {e}")
+        return None
 
 # -------------------------
 # SAFE imports (NO engine)
@@ -527,11 +552,18 @@ async def create_tryon(
     if not os.path.isfile(result_path):
         raise HTTPException(503, "Try-on output was not saved. Please try again.")
 
+    # Optional: upload to Cloudinary so images persist on Render and are visible on mobile
+    result_image_stored = result_path
+    public_id = f"result_{result_id}"
+    cloudinary_url = _upload_result_to_cloudinary(result_path, public_id)
+    if cloudinary_url:
+        result_image_stored = cloudinary_url
+
     history = history_model.TryOnHistory(
         user_id=current_user.id,
         person_image_url=person_path,
         cloth_image_url=cloth_path,
-        result_image_url=result_path,
+        result_image_url=result_image_stored,
         metadata_=metadata,
     )
 
@@ -539,8 +571,11 @@ async def create_tryon(
     db.commit()
     db.refresh(history)
 
-    # result_url: path with leading slash for display (frontend uses baseUrl + result_url)
-    result_url = f"/{result_path}" if not result_path.startswith("/") else result_path
+    # result_url: full URL (Cloudinary) or path (local) for display
+    if result_image_stored.startswith("http"):
+        result_url = result_image_stored
+    else:
+        result_url = f"/{result_image_stored}" if not result_image_stored.startswith("/") else result_image_stored
     return {
         "success": True,
         "result": result_path,

@@ -7,25 +7,42 @@ from typing import Dict, Optional
 import numpy as np
 from PIL import Image
 
+MEDIAPIPE_AVAILABLE = False
+_mp = None
+
 try:
-    import mediapipe as mp
+    import mediapipe as _mp
     import cv2
-    MEDIAPIPE_AVAILABLE = True
-except ImportError:
-    MEDIAPIPE_AVAILABLE = False
+    # On some platforms (e.g. Render, Python 3.13) mediapipe installs but .solutions is missing
+    if getattr(_mp, "solutions", None) is not None and getattr(_mp.solutions, "pose", None) is not None:
+        MEDIAPIPE_AVAILABLE = True
+except (ImportError, AttributeError):
+    pass
+
+
+def _create_pose_detector():
+    """Create pose detector if available; otherwise None. Avoids crash when mediapipe.solutions is missing."""
+    if not MEDIAPIPE_AVAILABLE or _mp is None:
+        return None
+    try:
+        return _mp.solutions.pose.Pose(
+            static_image_mode=True,
+            model_complexity=2,
+            min_detection_confidence=0.5,
+        )
+    except (AttributeError, Exception):
+        return None
 
 
 class SizeRecommendationService:
     """Recommend clothing sizes based on measurements"""
     
     def __init__(self):
-        self.pose_detector = None
-        if MEDIAPIPE_AVAILABLE:
-            self.pose_detector = mp.solutions.pose.Pose(
-                static_image_mode=True,
-                model_complexity=2,
-                min_detection_confidence=0.5
-            )
+        try:
+            self.pose_detector = _create_pose_detector()
+        except (AttributeError, Exception):
+            # Render / Python 3.13: mediapipe may install but .solutions missing
+            self.pose_detector = None
     
     def estimate_measurements_from_image(
         self,
@@ -62,11 +79,12 @@ class SizeRecommendationService:
         landmarks = results.pose_landmarks.landmark
         h, w, _ = image.shape
         
-        # Get key landmarks (normalized 0-1)
-        left_shoulder = landmarks[mp.solutions.pose.PoseLandmark.LEFT_SHOULDER]
-        right_shoulder = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER]
-        left_hip = landmarks[mp.solutions.pose.PoseLandmark.LEFT_HIP]
-        right_hip = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_HIP]
+        # Get key landmarks (normalized 0-1); use _mp when pose is available
+        pose_lm = _mp.solutions.pose.PoseLandmark
+        left_shoulder = landmarks[pose_lm.LEFT_SHOULDER]
+        right_shoulder = landmarks[pose_lm.RIGHT_SHOULDER]
+        left_hip = landmarks[pose_lm.LEFT_HIP]
+        right_hip = landmarks[pose_lm.RIGHT_HIP]
         
         # Calculate pixel distances
         shoulder_width_px = np.sqrt(

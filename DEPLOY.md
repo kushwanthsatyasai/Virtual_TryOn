@@ -17,6 +17,10 @@
    - `DATABASE_URL` (optional; default in render.yaml is SQLite; for production you can use Neon/Postgres from Render env)
    - `HF_TOKEN` (optional; for Hugging Face try-on spaces)
    - `GEMINI_API_KEY` (optional; for AI chat)
+   - **`CLOUDINARY_URL`** (recommended for try-on on mobile): Render’s filesystem is ephemeral, so try-on result images saved to disk disappear after a restart. To make **Recent Looks** and try-on results visible on your mobile app, set `CLOUDINARY_URL` so results are uploaded to Cloudinary and served via persistent URLs.
+     - Sign up at [cloudinary.com](https://cloudinary.com) (free tier).
+     - In Dashboard → **Settings** → **API Keys**, copy your **Cloud name**, **API Key**, and **API Secret**.
+     - Set `CLOUDINARY_URL` to: `cloudinary://API_KEY:API_SECRET@CLOUD_NAME` (replace with your values).
 
 4. **Service URL**  
    After deploy, the API URL will be like:  

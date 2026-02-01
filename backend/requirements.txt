@@ -74,6 +74,7 @@ python-dotenv>=1.0.0
 requests>=2.31.0
 aiofiles>=23.2.0
 gradio_client>=0.10.0
+cloudinary>=1.36.0  # Persistent storage for try-on results (Render / mobile)
 
 # Development & Testing
 pytest>=7.4.0
