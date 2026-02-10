@@ -28,9 +28,9 @@ if not env_loaded:
     # Fallback: try loading from current directory
     load_dotenv(override=True)
 
-# Cloudinary: optional; when set, try-on results are uploaded for persistent URLs (Render / mobile)
+# Cloudinary: optional; when set, try-on results and avatars are uploaded for persistent URLs (Render / mobile)
 if os.getenv("CLOUDINARY_URL"):
-    print("✓ CLOUDINARY_URL set — try-on results will be stored in Cloudinary")
+    print("✓ CLOUDINARY_URL set — media will be stored in Cloudinary")
 
 # AI chat: Gemini only (new SDK: from google import genai)
 provider = os.getenv("AI_CHAT_PROVIDER", "gemini")
@@ -56,8 +56,8 @@ from contextlib import asynccontextmanager
 import uuid
 from fastapi.staticfiles import StaticFiles
 
-# Optional: Cloudinary for persistent try-on result URLs (Render / mobile)
-def _upload_result_to_cloudinary(local_path: str, public_id: str) -> Optional[str]:
+# Optional: Cloudinary for persistent media URLs (Render / mobile)
+def _upload_to_cloudinary(local_path: str, public_id: str, folder: str) -> Optional[str]:
     """Upload a local file to Cloudinary; return secure_url or None if not configured/fails."""
     url = os.getenv("CLOUDINARY_URL")
     if not url or not url.strip():
@@ -68,13 +68,33 @@ def _upload_result_to_cloudinary(local_path: str, public_id: str) -> Optional[st
         cloudinary.config(cloudinary_url=url)
         r = cloudinary.uploader.upload(
             local_path,
-            folder="virtue-tryon",
+            folder=folder,
             public_id=public_id,
             overwrite=True,
         )
         return r.get("secure_url")
     except Exception as e:
-        print(f"⚠ Cloudinary upload failed: {e}")
+        print(f"⚠ Cloudinary upload failed ({folder}): {e}")
+        return None
+
+
+def _download_temp_file_from_url(url: str) -> Optional[str]:
+    """
+    Download a remote image to a temp file and return its path.
+    Used for avatars stored in Cloudinary when running size recommendation.
+    """
+    try:
+        import requests
+        resp = requests.get(url, timeout=15)
+        if resp.status_code != 200:
+            return None
+        tmp_path = f"temp/avatar_{uuid.uuid4()}.png"
+        os.makedirs(os.path.dirname(tmp_path), exist_ok=True)
+        with open(tmp_path, "wb") as f:
+            f.write(resp.content)
+        return tmp_path
+    except Exception as e:
+        print(f"⚠ Failed to download avatar from URL for sizing: {e}")
         return None
 
 # -------------------------
@@ -489,11 +509,19 @@ async def upload_full_body_photo(
     if not contents:
         raise HTTPException(status_code=400, detail="Empty file")
 
+    # Always save a local copy (for local dev / fallback)
     with open(rel_path, "wb") as f:
         f.write(contents)
 
-    # Store as a URL path the frontend can load
-    current_user.avatar_url = f"/uploads/avatars/{filename}"
+    avatar_url: str = f"/uploads/avatars/{filename}"
+
+    # If Cloudinary is configured, upload avatar and prefer its HTTPS URL for persistence
+    cloud_url = _upload_to_cloudinary(rel_path, f"avatar_user_{current_user.id}_{file_id}", "virtue-tryon/avatars")
+    if cloud_url:
+        avatar_url = cloud_url
+
+    # Store avatar URL (either local path or Cloudinary URL)
+    current_user.avatar_url = avatar_url
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
@@ -555,7 +583,7 @@ async def create_tryon(
     # Optional: upload to Cloudinary so images persist on Render and are visible on mobile
     result_image_stored = result_path
     public_id = f"result_{result_id}"
-    cloudinary_url = _upload_result_to_cloudinary(result_path, public_id)
+    cloudinary_url = _upload_to_cloudinary(result_path, public_id, "virtue-tryon/results")
     if cloudinary_url:
         result_image_stored = cloudinary_url
 
@@ -657,27 +685,46 @@ async def recommend_size_from_profile(
     garment_type: Optional[str] = Query("shirt"),
     current_user: user_model.User = Depends(get_current_user),
 ):
-    """Get AI size recommendation using the current user's profile (full-body) photo. Requires avatar_url set."""
+    """Get AI size recommendation using the current user's profile (full-body) photo, local or Cloudinary."""
     avatar_url = getattr(current_user, "avatar_url", None) or ""
     if not avatar_url or not avatar_url.strip():
         raise HTTPException(400, "Upload a full-body photo in Profile to get AI size recommendation.")
-    # Resolve path: avatar_url may be like /uploads/avatars/xxx.png
-    path = avatar_url.lstrip("/").replace("\\", "/")
-    if not path.startswith("uploads/"):
-        path = f"uploads/avatars/{path.split('/')[-1]}" if "/" in path else f"uploads/avatars/{path}"
-    if not os.path.isfile(path):
-        raise HTTPException(400, "Profile photo not found. Please upload a full-body photo in Profile.")
-    service = get_size_service()
-    measurements = service.estimate_measurements_from_image(
-        path,
-        getattr(current_user, "height_cm", None),
-    )
-    rec = service.recommend_size(measurements, garment_type=garment_type or "shirt", gender="unisex")
-    return {
-        "recommended_size": rec["recommended_size"],
-        "confidence": rec["confidence"],
-        "fit_notes": rec.get("fit_notes", ""),
-    }
+
+    # Resolve avatar source: Cloudinary / remote URL vs local file
+    temp_avatar_path: Optional[str] = None
+    try:
+        if avatar_url.startswith("http://") or avatar_url.startswith("https://"):
+            # Remote URL (e.g. Cloudinary) – download to temp for measurement
+            temp_avatar_path = _download_temp_file_from_url(avatar_url)
+            if not temp_avatar_path:
+                raise HTTPException(400, "Profile photo is not accessible. Please re-upload a full-body photo in Profile.")
+            path = temp_avatar_path
+        else:
+            # Local relative path, e.g. /uploads/avatars/xxx.png
+            path = avatar_url.lstrip("/").replace("\\", "/")
+            if not path.startswith("uploads/"):
+                path = f"uploads/avatars/{path.split('/')[-1]}" if "/" in path else f"uploads/avatars/{path}"
+            if not os.path.isfile(path):
+                raise HTTPException(400, "Profile photo not found. Please upload a full-body photo in Profile.")
+
+        service = get_size_service()
+        measurements = service.estimate_measurements_from_image(
+            path,
+            getattr(current_user, "height_cm", None),
+        )
+        rec = service.recommend_size(measurements, garment_type=garment_type or "shirt", gender="unisex")
+        return {
+            "recommended_size": rec["recommended_size"],
+            "confidence": rec["confidence"],
+            "fit_notes": rec.get("fit_notes", ""),
+        }
+    finally:
+        # Clean up temp file if we downloaded from URL
+        if temp_avatar_path and os.path.isfile(temp_avatar_path):
+            try:
+                os.remove(temp_avatar_path)
+            except Exception:
+                pass
 
 
 # =========================
