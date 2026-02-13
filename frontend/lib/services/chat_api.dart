@@ -23,9 +23,8 @@ class ChatApi {
         if (conversationId != null) 'conversation_id': conversationId,
       },
       options: Options(
+        // Use global ApiClient timeouts (5 min) so long Gemini calls don't get cut off.
         headers: {'Authorization': 'Bearer $token'},
-        sendTimeout: const Duration(seconds: 120),
-        receiveTimeout: const Duration(seconds: 120),
       ),
     );
     final data = res.data as Map<String, dynamic>;

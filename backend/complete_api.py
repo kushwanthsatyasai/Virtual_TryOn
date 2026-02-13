@@ -4,6 +4,8 @@ COMPLETE VIRTUAL TRY-ON API
 All features: Auth, Try-On, History, Wardrobe, Social, Size Recommendations
 """
 import os
+import logging
+import time
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -106,6 +108,9 @@ from app.models import tryon_history as history_model
 from app.models import wardrobe as wardrobe_model
 from app.models import social as social_model
 from app.models import chat as chat_model
+
+# Module-level logger for detailed request tracing (chat, try-on, sizing, etc.)
+logger = logging.getLogger("complete_api")
 
 # -------------------------
 # Lazy services
@@ -542,7 +547,15 @@ async def create_tryon(
     current_user: user_model.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    start_ts = time.monotonic()
     result_id = str(uuid.uuid4())
+    logger.info(
+        "TRYON_START user_id=%s result_id=%s product_id=%s product_name=%s",
+        getattr(current_user, "id", None),
+        result_id,
+        product_id,
+        product_name,
+    )
 
     person_path = f"temp/uploads/{result_id}_person.png"
     cloth_path = f"temp/uploads/{result_id}_cloth.png"
@@ -555,16 +568,36 @@ async def create_tryon(
 
     ai = get_ai_service()
     try:
+        logger.info(
+            "TRYON_CALL service=%s result_id=%s person_path=%s cloth_path=%s",
+            getattr(getattr(ai, "service", None), "__class__", type(ai.service)).__name__
+            if getattr(ai, "service", None) is not None
+            else type(ai).__name__,
+            result_id,
+            person_path,
+            cloth_path,
+        )
         success = await ai.generate_tryon(
             person_path, cloth_path, result_path, result_id
         )
     except RuntimeError as e:
+        logger.error(
+            "TRYON_RUNTIME_ERROR result_id=%s error=%s", result_id, str(e), exc_info=True
+        )
         raise HTTPException(503, str(e))
     except Exception as e:
-        raise HTTPException(503, "Try-on service temporarily unavailable. Please try again later.")
+        logger.error(
+            "TRYON_EXCEPTION result_id=%s error=%s", result_id, str(e), exc_info=True
+        )
+        raise HTTPException(
+            503, "Try-on service temporarily unavailable. Please try again later."
+        )
 
     if not success:
-        raise HTTPException(503, "Try-on service temporarily unavailable. Please try again later.")
+        logger.error("TRYON_FAILED result_id=%s success_flag_false", result_id)
+        raise HTTPException(
+            503, "Try-on service temporarily unavailable. Please try again later."
+        )
 
     metadata = None
     if product_id or product_name or product_image_url:
@@ -578,6 +611,7 @@ async def create_tryon(
 
     # Ensure result file exists (saved by ai.generate_tryon to result_path)
     if not os.path.isfile(result_path):
+        logger.error("TRYON_MISSING_RESULT_FILE result_id=%s path=%s", result_id, result_path)
         raise HTTPException(503, "Try-on output was not saved. Please try again.")
 
     # Optional: upload to Cloudinary so images persist on Render and are visible on mobile
@@ -603,7 +637,22 @@ async def create_tryon(
     if result_image_stored.startswith("http"):
         result_url = result_image_stored
     else:
-        result_url = f"/{result_image_stored}" if not result_image_stored.startswith("/") else result_image_stored
+        result_url = (
+            f"/{result_image_stored}"
+            if not result_image_stored.startswith("/")
+            else result_image_stored
+        )
+
+    elapsed = time.monotonic() - start_ts
+    logger.info(
+        "TRYON_SUCCESS user_id=%s result_id=%s history_id=%s duration_sec=%.2f result_url=%s",
+        getattr(current_user, "id", None),
+        result_id,
+        history.id,
+        elapsed,
+        result_url,
+    )
+
     return {
         "success": True,
         "result": result_path,
@@ -828,16 +877,31 @@ async def send_chat_message(
     }
     
     # Get AI response
+    start_ts = time.monotonic()
     try:
         # Check if chat service is available
         if chat.client is None and chat.provider != "ollama":
             api_key_name = (
                 "GEMINI_API_KEY" if chat.provider == "gemini" else f"{chat.provider.upper()}_API_KEY"
             )
+            logger.error(
+                "CHAT_CONFIG_ERROR user_id=%s provider=%s missing_key=%s",
+                current_user.id,
+                chat.provider,
+                api_key_name,
+            )
             raise HTTPException(
                 status_code=503,
                 detail=f"AI chat service not configured. Please set {api_key_name} in .env file and restart the server.",
             )
+
+        logger.info(
+            "CHAT_START user_id=%s provider=%s model=%s conversation_id=%s",
+            current_user.id,
+            chat.provider,
+            getattr(chat, "model", None),
+            conversation.id,
+        )
 
         result = chat.chat(
             user_message=request.message,
@@ -850,6 +914,14 @@ async def send_chat_message(
             # For Gemini, surface quota / 429 errors clearly
             error_text = str(result.get("error", "")).lower()
             response_text = result.get("response", "") or "AI chat service unavailable"
+
+            logger.error(
+                "CHAT_PROVIDER_ERROR user_id=%s provider=%s model=%s error=%s",
+                current_user.id,
+                chat.provider,
+                getattr(chat, "model", None),
+                result.get("error"),
+            )
 
             if chat.provider == "gemini" and ("quota" in error_text or "429" in error_text):
                 raise HTTPException(
@@ -889,6 +961,16 @@ async def send_chat_message(
         conversation.updated_at = datetime.utcnow()
         db.commit()
 
+        elapsed = time.monotonic() - start_ts
+        logger.info(
+            "CHAT_SUCCESS user_id=%s provider=%s model=%s conversation_id=%s duration_sec=%.2f",
+            current_user.id,
+            chat.provider,
+            result.get("model"),
+            conversation.id,
+            elapsed,
+        )
+
         return ChatMessageResponse(
             message=ai_response,
             conversation_id=conversation.id,
@@ -899,12 +981,26 @@ async def send_chat_message(
     except HTTPException:
         # Preserve HTTPExceptions we raised above
         db.rollback()
+        logger.exception(
+            "CHAT_HTTP_EXCEPTION user_id=%s provider=%s conversation_id=%s",
+            current_user.id,
+            getattr(chat, "provider", None),
+            conversation.id if 'conversation' in locals() else None,
+        )
         raise
     except Exception as e:
         db.rollback()
         # Provider-aware guidance for configuration issues
         provider = getattr(chat, "provider", None) or os.getenv("AI_CHAT_PROVIDER", "gemini")
         provider_env = "GEMINI_API_KEY" if provider == "gemini" else f"{provider.upper()}_API_KEY"
+        logger.exception(
+            "CHAT_UNEXPECTED_ERROR user_id=%s provider=%s model=%s conversation_id=%s error=%s",
+            current_user.id,
+            provider,
+            getattr(chat, "model", None),
+            conversation.id if 'conversation' in locals() else None,
+            str(e),
+        )
         raise HTTPException(
             status_code=500,
             detail=(

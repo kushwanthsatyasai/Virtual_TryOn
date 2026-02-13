@@ -54,9 +54,8 @@ class TryOnApi {
       '/api/v1/try-on',
       data: formData,
       options: Options(
+        // Use global ApiClient timeouts (5 min) to avoid premature Dio timeouts.
         headers: {'Authorization': 'Bearer $token'},
-        sendTimeout: const Duration(seconds: 180),
-        receiveTimeout: const Duration(seconds: 180),
       ),
     );
     final data = res.data as Map<String, dynamic>;
