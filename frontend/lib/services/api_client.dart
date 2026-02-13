@@ -14,10 +14,11 @@ class ApiClient {
   static final Dio dio = Dio(
     BaseOptions(
       baseUrl: kApiBaseUrl,
-      // Increased timeouts for slow backend (e.g. Render cold start, uploads).
-      connectTimeout: const Duration(seconds: 60),
-      receiveTimeout: const Duration(seconds: 120),
-      sendTimeout: const Duration(seconds: 120),
+      // Increased timeouts for slow backend / long VTO jobs on Render.
+      // 5 minutes is usually enough for HF Space cold start + try-on.
+      connectTimeout: const Duration(seconds: 90),
+      receiveTimeout: const Duration(minutes: 5),
+      sendTimeout: const Duration(minutes: 5),
       headers: {'Content-Type': 'application/json'},
     ),
   );

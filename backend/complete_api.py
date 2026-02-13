@@ -690,22 +690,48 @@ async def recommend_size_from_profile(
     if not avatar_url or not avatar_url.strip():
         raise HTTPException(400, "Upload a full-body photo in Profile to get AI size recommendation.")
 
-    # Resolve avatar source: Cloudinary / remote URL vs local file
+    # Resolve avatar source: prefer Cloudinary/remote URL first, then fall back to local avatar file
     temp_avatar_path: Optional[str] = None
     try:
+        path: Optional[str] = None
+
+        # 1) Try Cloudinary/remote URL from avatar_url (if it is an http/https URL)
         if avatar_url.startswith("http://") or avatar_url.startswith("https://"):
-            # Remote URL (e.g. Cloudinary) – download to temp for measurement
             temp_avatar_path = _download_temp_file_from_url(avatar_url)
-            if not temp_avatar_path:
-                raise HTTPException(400, "Profile photo is not accessible. Please re-upload a full-body photo in Profile.")
-            path = temp_avatar_path
-        else:
+            if temp_avatar_path and os.path.isfile(temp_avatar_path):
+                path = temp_avatar_path
+
+        # 2) If remote download failed or avatar_url is not http/https, try to find a local avatar file
+        if path is None:
+            try:
+                import glob
+
+                # Prefer latest local avatar for this user (matches upload filename pattern)
+                pattern = os.path.join("uploads", "avatars", f"user_{current_user.id}_*")
+                local_candidates = glob.glob(pattern)
+                if local_candidates:
+                    local_candidates.sort(key=os.path.getmtime, reverse=True)
+                    candidate = local_candidates[0]
+                    if os.path.isfile(candidate):
+                        path = candidate
+            except Exception:
+                path = None
+
+        # 3) If still no path, resolve from avatar_url as relative local path
+        if path is None:
             # Local relative path, e.g. /uploads/avatars/xxx.png
             path = avatar_url.lstrip("/").replace("\\", "/")
             if not path.startswith("uploads/"):
-                path = f"uploads/avatars/{path.split('/')[-1]}" if "/" in path else f"uploads/avatars/{path}"
+                path = (
+                    f"uploads/avatars/{path.split('/')[-1]}"
+                    if "/" in path
+                    else f"uploads/avatars/{path}"
+                )
             if not os.path.isfile(path):
-                raise HTTPException(400, "Profile photo not found. Please upload a full-body photo in Profile.")
+                raise HTTPException(
+                    400,
+                    "Profile photo not found or not accessible. Please upload a full-body photo in Profile again.",
+                )
 
         service = get_size_service()
         measurements = service.estimate_measurements_from_image(
@@ -805,35 +831,48 @@ async def send_chat_message(
     try:
         # Check if chat service is available
         if chat.client is None and chat.provider != "ollama":
-            api_key_name = "GEMINI_API_KEY" if chat.provider == "gemini" else f"{chat.provider.upper()}_API_KEY"
+            api_key_name = (
+                "GEMINI_API_KEY" if chat.provider == "gemini" else f"{chat.provider.upper()}_API_KEY"
+            )
             raise HTTPException(
                 status_code=503,
-                detail=f"AI chat service not configured. Please set {api_key_name} in .env file and restart the server."
+                detail=f"AI chat service not configured. Please set {api_key_name} in .env file and restart the server.",
             )
-        
+
         result = chat.chat(
             user_message=request.message,
             user_context=user_context,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
         )
-        
-        # Check if result contains an error
+
+        # Check if result contains an error (e.g. quota exceeded, provider issues)
         if "error" in result:
+            # For Gemini, surface quota / 429 errors clearly
+            error_text = str(result.get("error", "")).lower()
+            response_text = result.get("response", "") or "AI chat service unavailable"
+
+            if chat.provider == "gemini" and ("quota" in error_text or "429" in error_text):
+                raise HTTPException(
+                    status_code=503,
+                    detail="Gemini chat quota has been exceeded for this project. "
+                    "Please upgrade your Gemini plan or switch AI_CHAT_PROVIDER to a different provider (e.g. openai, anthropic, ollama).",
+                )
+
             raise HTTPException(
                 status_code=503,
-                detail=result.get("response", "AI chat service unavailable")
+                detail=response_text,
             )
-        
+
         ai_response = result.get("response", "I'm sorry, I couldn't generate a response.")
-        
+
         # Save user message
         user_msg = chat_model.ChatMessage(
             conversation_id=conversation.id,
             role="user",
-            content=request.message
+            content=request.message,
         )
         db.add(user_msg)
-        
+
         # Save AI response
         ai_msg = chat_model.ChatMessage(
             conversation_id=conversation.id,
@@ -841,27 +880,37 @@ async def send_chat_message(
             content=ai_response,
             message_metadata={
                 "model": result.get("model"),
-                "usage": result.get("usage", {})
-            }
+                "usage": result.get("usage", {}),
+            },
         )
         db.add(ai_msg)
-        
+
         # Update conversation timestamp
         conversation.updated_at = datetime.utcnow()
         db.commit()
-        
+
         return ChatMessageResponse(
             message=ai_response,
             conversation_id=conversation.id,
             model=result.get("model"),
-            usage=result.get("usage")
+            usage=result.get("usage"),
         )
-    
+
+    except HTTPException:
+        # Preserve HTTPExceptions we raised above
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
+        # Provider-aware guidance for configuration issues
+        provider = getattr(chat, "provider", None) or os.getenv("AI_CHAT_PROVIDER", "gemini")
+        provider_env = "GEMINI_API_KEY" if provider == "gemini" else f"{provider.upper()}_API_KEY"
         raise HTTPException(
             status_code=500,
-            detail=f"Chat service error: {str(e)}. Make sure OPENAI_API_KEY or ANTHROPIC_API_KEY is set in .env"
+            detail=(
+                f"Chat service error: {str(e)}. "
+                f"Make sure {provider_env} is set in .env or switch AI_CHAT_PROVIDER to a configured provider."
+            ),
         )
 
 
