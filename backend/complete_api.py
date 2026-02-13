@@ -111,6 +111,7 @@ from app.models import chat as chat_model
 
 # Module-level logger for detailed request tracing (chat, try-on, sizing, etc.)
 logger = logging.getLogger("complete_api")
+logger.setLevel(logging.INFO)
 
 # -------------------------
 # Lazy services
@@ -549,6 +550,7 @@ async def create_tryon(
 ):
     start_ts = time.monotonic()
     result_id = str(uuid.uuid4())
+    print(f"[TRYON_START] user_id={getattr(current_user, 'id', None)} result_id={result_id} product_id={product_id} product_name={product_name}")
     logger.info(
         "TRYON_START user_id=%s result_id=%s product_id=%s product_name=%s",
         getattr(current_user, "id", None),
@@ -577,6 +579,7 @@ async def create_tryon(
             person_path,
             cloth_path,
         )
+        print(f"[TRYON_CALL] result_id={result_id} person_path={person_path} cloth_path={cloth_path}")
         success = await ai.generate_tryon(
             person_path, cloth_path, result_path, result_id
         )
@@ -584,17 +587,20 @@ async def create_tryon(
         logger.error(
             "TRYON_RUNTIME_ERROR result_id=%s error=%s", result_id, str(e), exc_info=True
         )
+        print(f"[TRYON_RUNTIME_ERROR] result_id={result_id} error={e}")
         raise HTTPException(503, str(e))
     except Exception as e:
         logger.error(
             "TRYON_EXCEPTION result_id=%s error=%s", result_id, str(e), exc_info=True
         )
+        print(f"[TRYON_EXCEPTION] result_id={result_id} error={e}")
         raise HTTPException(
             503, "Try-on service temporarily unavailable. Please try again later."
         )
 
     if not success:
         logger.error("TRYON_FAILED result_id=%s success_flag_false", result_id)
+        print(f"[TRYON_FAILED] result_id={result_id} success_flag_false")
         raise HTTPException(
             503, "Try-on service temporarily unavailable. Please try again later."
         )
@@ -612,6 +618,7 @@ async def create_tryon(
     # Ensure result file exists (saved by ai.generate_tryon to result_path)
     if not os.path.isfile(result_path):
         logger.error("TRYON_MISSING_RESULT_FILE result_id=%s path=%s", result_id, result_path)
+        print(f"[TRYON_MISSING_RESULT_FILE] result_id={result_id} path={result_path}")
         raise HTTPException(503, "Try-on output was not saved. Please try again.")
 
     # Optional: upload to Cloudinary so images persist on Render and are visible on mobile
@@ -652,6 +659,7 @@ async def create_tryon(
         elapsed,
         result_url,
     )
+    print(f"[TRYON_SUCCESS] user_id={getattr(current_user, 'id', None)} result_id={result_id} history_id={history.id} duration_sec={elapsed:.2f} result_url={result_url}")
 
     return {
         "success": True,
