@@ -73,7 +73,7 @@ class AIFashionChatService:
             elif self.provider == "anthropic":
                 self.model = "claude-3-haiku-20240307"  # Fast and cost-effective
             elif self.provider == "gemini":
-                self.model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+                self.model = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
             elif self.provider == "ollama":
                 self.model = os.getenv("OLLAMA_MODEL", "llama3.2")  # Run: ollama run llama3.2
         else:

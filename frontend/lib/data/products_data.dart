@@ -4,7 +4,7 @@ import '../screens/product/product_detail_screen.dart';
 final List<ProductItem> allProducts = [
   ProductItem(
     name: 'Balmain Paris Baroque Print Shirt',
-    price: 349.00,
+    price: 3049.00,
     imageUrl: 'assets/images/Balmain Paris Shirt.jpg',
   ),
   ProductItem(
