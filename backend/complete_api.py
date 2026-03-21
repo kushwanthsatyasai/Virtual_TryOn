@@ -6,8 +6,11 @@ All features: Auth, Try-On, History, Wardrobe, Social, Size Recommendations
 import os
 import logging
 import time
+import random
+import smtplib
 from dotenv import load_dotenv
 from pathlib import Path
+from email.message import EmailMessage
 
 # Load environment variables from .env file
 # Try multiple paths to find .env file
@@ -121,6 +124,12 @@ auth_service = None
 size_service = None
 chat_service = None
 recommendation_engine = None
+
+# In-memory OTP store for password reset.
+# Shape: {email: {"otp": "123456", "expires_at": unix_ts, "attempts": int}}
+PASSWORD_RESET_OTPS: Dict[str, Dict[str, object]] = {}
+OTP_TTL_SECONDS = 10 * 60
+OTP_MAX_ATTEMPTS = 5
 
 
 def get_ai_service():
@@ -340,6 +349,42 @@ class LoginRequest(BaseModel):
     username: str  # Can be email or username
     password: str
 
+class GoogleLoginRequest(BaseModel):
+    """
+    Minimal Google login payload from the client.
+
+    Note: This project currently does not verify the Google id_token server-side.
+    The endpoint trusts the provided email/google_id for a working OAuth-like flow.
+    """
+    email: EmailStr
+    full_name: Optional[str] = None
+    google_id: Optional[str] = None
+    id_token: Optional[str] = None
+
+
+class GoogleLoginResponse(BaseModel):
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    user: Optional[UserResponse] = None
+    needs_signup: bool = False
+    email: EmailStr
+    full_name: Optional[str] = None
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    new_password: str
+
+
+class PasswordResetOtpRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetOtpConfirmRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
+
 
 @app.post("/auth/register", response_model=Token)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
@@ -449,6 +494,179 @@ async def login_simple(
         token_type="bearer",
         user=UserResponse.model_validate(user)
     )
+
+@app.post("/auth/google-login", response_model=GoogleLoginResponse, tags=["Auth"])
+async def google_login(
+    credentials: GoogleLoginRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Google login flow:
+    - If the user exists (by email): return access token.
+    - If the user does not exist: return `needs_signup=true` so the client can
+      continue with the normal signup screens.
+    """
+    auth = get_auth_service()
+
+    user = db.query(user_model.User).filter(user_model.User.email == str(credentials.email)).first()
+    if user:
+        token = auth.create_access_token({"sub": str(user.id)})
+        return GoogleLoginResponse(
+            access_token=token,
+            token_type="bearer",
+            user=UserResponse.model_validate(user),
+            needs_signup=False,
+            email=credentials.email,
+            full_name=credentials.full_name or user.full_name,
+        )
+
+    return GoogleLoginResponse(
+        access_token=None,
+        token_type="bearer",
+        user=None,
+        needs_signup=True,
+        email=credentials.email,
+        full_name=credentials.full_name,
+    )
+
+
+@app.post("/auth/password-reset", tags=["Auth"])
+async def password_reset(
+    payload: PasswordResetRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Simple password reset for demo/prototype purposes.
+
+    In production you would implement email verification + reset tokens.
+    """
+    auth = get_auth_service()
+    ok, msg = auth.validate_password_strength(payload.new_password)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+
+    user = db.query(user_model.User).filter(user_model.User.email == str(payload.email)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.hashed_password = auth.get_password_hash(payload.new_password)
+    db.add(user)
+    db.commit()
+
+    return {"success": True}
+
+
+def _send_password_reset_otp_email(email_to: str, otp: str) -> bool:
+    """
+    Send OTP email via SMTP if configured.
+    Returns True when sent through SMTP, False when SMTP is not configured.
+    """
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM_EMAIL", smtp_user or "no-reply@virtue.local")
+
+    if not smtp_host or not smtp_user or not smtp_password:
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = "Virtue Try-On Password Reset OTP"
+    msg["From"] = smtp_from
+    msg["To"] = email_to
+    msg.set_content(
+        f"Your OTP to reset password is: {otp}\n\n"
+        f"This OTP is valid for {OTP_TTL_SECONDS // 60} minutes."
+    )
+
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.send_message(msg)
+    return True
+
+
+@app.post("/auth/password-reset/request-otp", tags=["Auth"])
+async def password_reset_request_otp(
+    payload: PasswordResetOtpRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Request password-reset OTP.
+    Always returns success to avoid leaking whether an email exists.
+    """
+    email = str(payload.email).strip().lower()
+
+    user = db.query(user_model.User).filter(user_model.User.email == email).first()
+    if user:
+        otp = f"{random.randint(0, 999999):06d}"
+        PASSWORD_RESET_OTPS[email] = {
+            "otp": otp,
+            "expires_at": time.time() + OTP_TTL_SECONDS,
+            "attempts": 0,
+        }
+        sent = False
+        try:
+            sent = _send_password_reset_otp_email(email, otp)
+        except Exception as e:
+            logger.warning("Failed to send OTP email to %s: %s", email, e)
+
+        # Development fallback: if SMTP is not configured, expose OTP in response.
+        if not sent and os.getenv("DEBUG", "false").lower() == "true":
+            return {"success": True, "message": "OTP generated", "dev_otp": otp}
+
+    return {"success": True, "message": "If this email exists, OTP has been sent"}
+
+
+@app.post("/auth/password-reset/confirm", tags=["Auth"])
+async def password_reset_confirm(
+    payload: PasswordResetOtpConfirmRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Confirm OTP and set a new password.
+    """
+    email = str(payload.email).strip().lower()
+    otp = payload.otp.strip()
+    auth = get_auth_service()
+
+    if len(otp) != 6 or not otp.isdigit():
+        raise HTTPException(status_code=400, detail="Invalid OTP format")
+
+    ok, msg = auth.validate_password_strength(payload.new_password)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+
+    state = PASSWORD_RESET_OTPS.get(email)
+    if not state:
+        raise HTTPException(status_code=400, detail="OTP not requested or expired")
+
+    expires_at = float(state.get("expires_at", 0))
+    if time.time() > expires_at:
+        PASSWORD_RESET_OTPS.pop(email, None)
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    attempts = int(state.get("attempts", 0))
+    if attempts >= OTP_MAX_ATTEMPTS:
+        PASSWORD_RESET_OTPS.pop(email, None)
+        raise HTTPException(status_code=429, detail="Too many OTP attempts")
+
+    expected = str(state.get("otp", ""))
+    if otp != expected:
+        state["attempts"] = attempts + 1
+        PASSWORD_RESET_OTPS[email] = state
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    user = db.query(user_model.User).filter(user_model.User.email == email).first()
+    if not user:
+        PASSWORD_RESET_OTPS.pop(email, None)
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.hashed_password = auth.get_password_hash(payload.new_password)
+    db.add(user)
+    db.commit()
+    PASSWORD_RESET_OTPS.pop(email, None)
+    return {"success": True, "message": "Password reset successful"}
 
 
 # =========================
@@ -605,15 +823,11 @@ async def create_tryon(
             503, "Try-on service temporarily unavailable. Please try again later."
         )
 
-    metadata = None
-    if product_id or product_name or product_image_url:
-        metadata = {
-            k: v for k, v in [
-                ("product_id", product_id),
-                ("product_name", product_name),
-                ("product_image_url", product_image_url),
-            ] if v
-        }
+    from app.services.recommendation_service import build_tryon_metadata_for_product
+
+    metadata = build_tryon_metadata_for_product(
+        db, product_id, product_name, product_image_url
+    )
 
     # Ensure result file exists (saved by ai.generate_tryon to result_path)
     if not os.path.isfile(result_path):

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../search/search_screen.dart';
 import '../product/product_detail_screen.dart';
+import '../../models/product_item.dart';
 import '../../widgets/bottom_navigation_bar.dart';
 import '../../widgets/chat_fab_overlay.dart';
 import '../../models/tried_look.dart';

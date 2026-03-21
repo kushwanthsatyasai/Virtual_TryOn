@@ -97,5 +97,104 @@ class AuthApi {
     }
     return url;
   }
+
+  /// Google sign-in entrypoint.
+  ///
+  /// Backend behavior:
+  /// - existing user: returns `access_token` so the app can immediately sign in
+  /// - new user: returns `needs_signup=true` and no token; app should route to signup screens
+  static Future<GoogleLoginResult> googleLogin({
+    required String email,
+    required String fullName,
+    required String googleId,
+    String? idToken,
+  }) async {
+    final res = await ApiClient.dio.post(
+      '/auth/google-login',
+      data: {
+        'email': email,
+        'full_name': fullName,
+        'google_id': googleId,
+        'id_token': idToken,
+      },
+      options: Options(
+        contentType: Headers.jsonContentType,
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+
+    final data = res.data as Map<String, dynamic>;
+    final needsSignup = data['needs_signup'] as bool? ?? false;
+    final token = data['access_token'] as String?;
+
+    if (token != null && token.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_tokenKey, token);
+    }
+
+    return GoogleLoginResult(
+      needsSignup: needsSignup,
+      accessToken: token,
+      email: data['email'] as String? ?? email,
+      fullName: data['full_name'] as String? ?? fullName,
+    );
+  }
+
+  /// Request an OTP for password reset.
+  /// In DEBUG backend mode without SMTP, response may include `dev_otp`.
+  static Future<String?> requestPasswordResetOtp({
+    required String email,
+  }) async {
+    final res = await ApiClient.dio.post(
+      '/auth/password-reset/request-otp',
+      data: {
+        'email': email,
+      },
+      options: Options(
+        contentType: Headers.jsonContentType,
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+    final data = res.data as Map<String, dynamic>? ?? {};
+    final devOtp = data['dev_otp'] as String?;
+    return devOtp;
+  }
+
+  /// Confirm OTP and reset password.
+  static Future<void> confirmPasswordReset({
+    required String email,
+    required String otp,
+    required String newPassword,
+  }) async {
+    await ApiClient.dio.post(
+      '/auth/password-reset/confirm',
+      data: {
+        'email': email,
+        'otp': otp,
+        'new_password': newPassword,
+      },
+      options: Options(
+        contentType: Headers.jsonContentType,
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+  }
+}
+
+class GoogleLoginResult {
+  final bool needsSignup;
+  final String? accessToken;
+  final String email;
+  final String fullName;
+
+  GoogleLoginResult({
+    required this.needsSignup,
+    required this.accessToken,
+    required this.email,
+    required this.fullName,
+  });
 }
 

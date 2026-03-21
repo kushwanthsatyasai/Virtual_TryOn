@@ -1,4 +1,4 @@
-import '../screens/product/product_detail_screen.dart';
+import '../models/product_item.dart';
 
 /// Shared product catalog for Home (Trending), Search, etc.
 final List<ProductItem> allProducts = [

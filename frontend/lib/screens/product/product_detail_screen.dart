@@ -8,6 +8,8 @@ import '../../services/try_on_api.dart';
 import '../../services/profile_api.dart';
 import '../../services/size_recommendation_api.dart';
 import '../../services/api_client.dart';
+import '../../services/product_detail_recommendations_service.dart';
+import '../../models/product_item.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final ProductItem product;
@@ -35,6 +37,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _tryOnLoading = false;
   String? _aiRecommendedSize;
   bool _sizeRecommendationLoading = false;
+
+  List<DetailRecommendedProduct> _detailRecs = [];
+  bool _detailRecsLoading = true;
 
   bool get _isFavorite =>
       FavoritesCartStore.isFavorite(widget.product.name, widget.product.imageUrl);
@@ -83,17 +88,34 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   ];
 
   List<String> get _galleryImages {
-    final productImages = widget.productImages ?? _defaultProductImages;
+    // Always show the selected product image.
+    // If no extra product gallery images were provided, keep the gallery to the single
+    // product image (otherwise swiping would show the shared placeholder images).
+    final baseImages = (widget.productImages != null && widget.productImages!.isNotEmpty)
+        ? widget.productImages!
+        : (widget.product.imageUrl.isNotEmpty ? <String>[widget.product.imageUrl] : _defaultProductImages);
+
     if (widget.triedLookImageUrl != null && widget.triedLookImageUrl!.isNotEmpty) {
-      return [widget.triedLookImageUrl!, ...productImages];
+      return [widget.triedLookImageUrl!, ...baseImages];
     }
-    return productImages;
+    return baseImages;
   }
 
   @override
   void initState() {
     super.initState();
     _fetchSizeRecommendation();
+    _loadDetailRecommendations();
+  }
+
+  Future<void> _loadDetailRecommendations() async {
+    final list =
+        await ProductDetailRecommendationsService.loadForProduct(widget.product);
+    if (!mounted) return;
+    setState(() {
+      _detailRecs = list;
+      _detailRecsLoading = false;
+    });
   }
 
   @override
@@ -500,6 +522,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                       const SizedBox(height: 32),
 
+                      _buildRecommendationsStrip(
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
+                        secondaryBg: secondaryBg,
+                        primaryColor: primaryColor,
+                      ),
+
                       // Action Buttons
                       Row(
                         children: [
@@ -609,6 +638,181 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           const ChatFabOverlay(),
         ],
       ),
+    );
+  }
+
+  Widget _buildRecommendationsStrip({
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color secondaryBg,
+    required Color primaryColor,
+  }) {
+    if (_detailRecsLoading) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'You may also like',
+            style: TextStyle(
+              color: textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'SpaceGrotesk',
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 152,
+            child: Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  color: primaryColor,
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      );
+    }
+    if (_detailRecs.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'You may also like',
+          style: TextStyle(
+            color: textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'SpaceGrotesk',
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 172,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _detailRecs.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final chip = _detailRecs[index];
+              final p = chip.item;
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (ctx) => ProductDetailScreen(product: p),
+                    ),
+                  );
+                },
+                child: SizedBox(
+                  width: 118,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              height: 114,
+                              width: double.infinity,
+                              color: secondaryBg,
+                              child: p.imageUrl.startsWith('http')
+                                  ? Image.network(
+                                      p.imageUrl,
+                                      fit: BoxFit.cover,
+                                      loadingBuilder: (context, child, loadingProgress) {
+                                        if (loadingProgress == null) return child;
+                                        return Center(
+                                          child: SizedBox(
+                                            width: 22,
+                                            height: 22,
+                                            child: CircularProgressIndicator(
+                                              color: primaryColor,
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      errorBuilder: (_, __, ___) => const Center(
+                                        child: Icon(Icons.image_not_supported,
+                                            color: Colors.white38, size: 28),
+                                      ),
+                                    )
+                                  : Image.asset(
+                                      p.imageUrl,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                      errorBuilder: (_, __, ___) => const Center(
+                                        child: Icon(Icons.image_not_supported,
+                                            color: Colors.white38, size: 28),
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          if (chip.badge.isNotEmpty)
+                            Positioned(
+                              top: 6,
+                              left: 6,
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  chip.badge,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        p.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'SpaceGrotesk',
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '₹${p.price.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          color: textSecondary,
+                          fontSize: 11,
+                          fontFamily: 'SpaceGrotesk',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 
@@ -885,14 +1089,3 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 }
 
-class ProductItem {
-  final String name;
-  final double price;
-  final String imageUrl;
-
-  const ProductItem({
-    required this.name,
-    required this.price,
-    required this.imageUrl,
-  });
-}

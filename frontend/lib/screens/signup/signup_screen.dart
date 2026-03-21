@@ -4,7 +4,14 @@ import 'signup_measurements_screen.dart'; // Fix the import
 import '../../models/signup_draft.dart';
 
 class SignUpScreen extends StatefulWidget {
-  const SignUpScreen({super.key});
+  const SignUpScreen({
+    super.key,
+    this.initialName,
+    this.initialEmail,
+  });
+
+  final String? initialName;
+  final String? initialEmail;
 
   @override
   State<SignUpScreen> createState() => _SignUpScreenState();
@@ -27,6 +34,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
   static final RegExp _passwordRegex = RegExp(
     r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$',
   );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialName != null) _nameController.text = widget.initialName!;
+    if (widget.initialEmail != null) _emailController.text = widget.initialEmail!;
+  }
 
   @override
   void dispose() {

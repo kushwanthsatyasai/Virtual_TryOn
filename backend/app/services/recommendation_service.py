@@ -10,14 +10,323 @@ AI-powered clothing recommendations based on:
 """
 import logging
 import os
+import uuid
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 import json
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_, desc
+from sqlalchemy import func, and_, or_, desc, text
 
 logger = logging.getLogger(__name__)
+
+
+def _rollback_db_session_safe(db: Session) -> None:
+    try:
+        db.rollback()
+    except Exception:
+        pass
+
+
+def _first_color_from_db_value(cols_val) -> str:
+    if cols_val is None:
+        return "unknown"
+    if isinstance(cols_val, list):
+        return str(cols_val[0]).lower() if cols_val else "unknown"
+    if isinstance(cols_val, str):
+        try:
+            arr = json.loads(cols_val)
+            if isinstance(arr, list) and arr:
+                return str(arr[0]).lower()
+        except (json.JSONDecodeError, TypeError):
+            if cols_val.strip():
+                return cols_val.strip().lower()
+    return "unknown"
+
+
+def _product_row_from_mapping(row) -> Optional[Dict]:
+    if row is None:
+        return None
+    d = dict(row)
+    d["color_guess"] = _first_color_from_db_value(d.get("colors"))
+    return d
+
+
+def _sql_fetch_product_by_id(db: Session, pid: int) -> Optional[Dict]:
+    try:
+        r = db.execute(
+            text(
+                "SELECT id, name, category, brand, subcategory, colors, price, main_image_url "
+                "FROM products WHERE id = :pid AND (is_active = true OR is_active IS NULL)"
+            ),
+            {"pid": pid},
+        ).mappings().first()
+        return _product_row_from_mapping(r)
+    except Exception as e:
+        logger.debug("SQL product by id failed: %s", e)
+        _rollback_db_session_safe(db)
+        return None
+
+
+def _sql_fetch_product_by_name(db: Session, name: str) -> Optional[Dict]:
+    try:
+        r = db.execute(
+            text(
+                "SELECT id, name, category, brand, subcategory, colors, price, main_image_url "
+                "FROM products WHERE lower(trim(name)) = lower(trim(:name)) "
+                "AND (is_active = true OR is_active IS NULL) LIMIT 1"
+            ),
+            {"name": name},
+        ).mappings().first()
+        return _product_row_from_mapping(r)
+    except Exception as e:
+        logger.debug("SQL product by name failed: %s", e)
+        _rollback_db_session_safe(db)
+        return None
+
+
+def _sql_user_favorite_product_rows(db: Session, user_id: int) -> List[Dict]:
+    try:
+        rows = db.execute(
+            text(
+                """
+                SELECT p.id, p.name, p.category, p.brand, p.subcategory, p.colors, p.price, p.main_image_url
+                FROM user_favorites uf
+                JOIN products p ON p.id = uf.product_id
+                WHERE uf.user_id = :uid
+                """
+            ),
+            {"uid": user_id},
+        ).mappings().all()
+        return [_product_row_from_mapping(r) for r in rows if r is not None]
+    except Exception as e:
+        logger.debug("SQL user favorites join failed: %s", e)
+        _rollback_db_session_safe(db)
+        return []
+
+
+def _sql_user_favorite_product_ids(db: Session, user_id: int) -> set:
+    try:
+        rows = db.execute(
+            text("SELECT product_id FROM user_favorites WHERE user_id = :uid"),
+            {"uid": user_id},
+        ).fetchall()
+        return {int(r[0]) for r in rows if r and r[0] is not None}
+    except Exception as e:
+        logger.debug("SQL user_favorites ids failed: %s", e)
+        _rollback_db_session_safe(db)
+        return set()
+
+
+def _sql_count_user_favorites(db: Session, user_id: int) -> int:
+    try:
+        n = db.execute(
+            text("SELECT COUNT(*) FROM user_favorites WHERE user_id = :uid"),
+            {"uid": user_id},
+        ).scalar()
+        return int(n or 0)
+    except Exception as e:
+        logger.debug("SQL count favorites failed: %s", e)
+        _rollback_db_session_safe(db)
+        return 0
+
+
+def _sql_fetch_products_catalog(db: Session, category_filter: Optional[str]) -> List[Dict]:
+    try:
+        if category_filter:
+            rows = db.execute(
+                text(
+                    "SELECT id, name, category, brand, subcategory, colors, price, main_image_url "
+                    "FROM products WHERE (is_active = true OR is_active IS NULL) "
+                    "AND category = :cat LIMIT 200"
+                ),
+                {"cat": category_filter},
+            ).mappings().all()
+        else:
+            rows = db.execute(
+                text(
+                    "SELECT id, name, category, brand, subcategory, colors, price, main_image_url "
+                    "FROM products WHERE (is_active = true OR is_active IS NULL) LIMIT 200"
+                )
+            ).mappings().all()
+        return [_product_row_from_mapping(r) for r in rows if r is not None]
+    except Exception as e:
+        logger.debug("SQL products catalog failed: %s", e)
+        _rollback_db_session_safe(db)
+        return []
+
+
+# Frontend-aligned catalog (string ids). Used for try-on metadata enrichment and recommendations.
+RECOMMENDATION_CATALOG: List[Dict] = [
+    {"id": "balmain-shirt", "name": "Balmain Paris Baroque Print Shirt", "category": "top", "color": "white", "brand": "Balmain", "style": "designer", "price": 3049.00, "image_url": "assets/images/Balmain Paris Shirt.jpg"},
+    {"id": "balmain-sweater", "name": "Balmain Monogram Knit Sweater", "category": "top", "color": "black", "brand": "Balmain", "style": "designer", "price": 429.00, "image_url": "assets/images/Balmain_Tshirt.jpg"},
+    {"id": "blazer", "name": "Navy Blue Tailored Blazer", "category": "outerwear", "color": "navy", "brand": "Generic", "style": "formal", "price": 279.00, "image_url": "assets/images/Blazer.jpg"},
+    {"id": "flowing-shirt", "name": "Soft Washed Blue Button-Up Shirt", "category": "top", "color": "blue", "brand": "Generic", "style": "casual", "price": 79.00, "image_url": "assets/images/Flowing Shirt.jpg"},
+    {"id": "hoodie", "name": "Soho NYC Athletics Hoodie", "category": "outerwear", "color": "gray", "brand": "H&M", "style": "streetwear", "price": 69.00, "image_url": "assets/images/Hoodie H&M.jpg"},
+    {"id": "jeans", "name": "Light Wash Wide-Leg Denim Jeans", "category": "bottom", "color": "blue", "brand": "Generic", "style": "casual", "price": 89.00, "image_url": "assets/images/Loose Jeans.jpg"},
+    {"id": "suede-jacket", "name": "Mint Green Corduroy Trucker Jacket", "category": "outerwear", "color": "green", "brand": "Generic", "style": "casual", "price": 149.00, "image_url": "assets/images/Suede Jacket.jpeg"},
+    {"id": "zara-shirt", "name": "State Park Striped Overshirt", "category": "top", "color": "multi", "brand": "Zara", "style": "casual", "price": 99.00, "image_url": "assets/images/ZARA_Shirt.jpg"},
+    {"id": "zara-sweater", "name": "Oatmeal Ribbed Crewneck Sweater", "category": "top", "color": "beige", "brand": "Zara", "style": "casual", "price": 119.00, "image_url": "assets/images/Zara_Sweater.jpg"},
+    {"id": "zara-tshirt", "name": "Classic Burgundy Crew Neck T-Shirt", "category": "top", "color": "burgundy", "brand": "Zara", "style": "casual", "price": 49.00, "image_url": "assets/images/ZARA_Tshirt.jpg"},
+    {"id": "coat", "name": "Light Green Suede Trucker Jacket", "category": "outerwear", "color": "green", "brand": "Generic", "style": "casual", "price": 189.00, "image_url": "assets/images/Coat.png"},
+    {"id": "stussy-tshirt", "name": "Black Stüssy Logo T-Shirt", "category": "top", "color": "black", "brand": "Stüssy", "style": "streetwear", "price": 59.00, "image_url": "assets/images/Tshirt_Web.jpg"},
+]
+
+RECOMMENDATION_CATALOG_BY_ID: Dict[str, Dict] = {p["id"]: p for p in RECOMMENDATION_CATALOG}
+
+
+def _tryon_meta(tryon) -> Dict:
+    """TryOnHistory stores JSON in column mapped as `metadata_` (not `.metadata`)."""
+    return getattr(tryon, "metadata_", None) or {}
+
+
+def build_tryon_metadata_for_product(
+    db: Optional[Session],
+    product_id: Optional[str],
+    product_name: Optional[str],
+    product_image_url: Optional[str],
+) -> Optional[Dict]:
+    """
+    Build recommendation-friendly metadata when saving try-on history.
+    Ensures item_id / category / color / brand exist for personalization.
+    """
+    if not (product_id or product_name or product_image_url):
+        return None
+
+    meta: Dict = {
+        k: v
+        for k, v in [
+            ("product_id", product_id),
+            ("product_name", product_name),
+            ("product_image_url", product_image_url),
+        ]
+        if v
+    }
+
+    # Numeric DB product (UserFavorite / products table)
+    if db is not None and product_id and str(product_id).isdigit():
+        row = _sql_fetch_product_by_id(db, int(product_id))
+        if row:
+            meta["item_id"] = str(row["id"])
+            meta["product_db_id"] = row["id"]
+            meta["category"] = row.get("category") or "top"
+            meta["brand"] = row.get("brand") or "unknown"
+            meta["style"] = (row.get("subcategory") or "casual") if row.get("subcategory") else "casual"
+            meta["color"] = row.get("color_guess") or "unknown"
+            meta["price"] = float(row["price"]) if row.get("price") is not None else None
+            return meta
+
+    # String slug from in-app catalog
+    if product_id and product_id in RECOMMENDATION_CATALOG_BY_ID:
+        c = RECOMMENDATION_CATALOG_BY_ID[product_id]
+        meta["item_id"] = c["id"]
+        meta["category"] = c["category"]
+        meta["color"] = c.get("color", "unknown")
+        meta["brand"] = c.get("brand", "unknown")
+        meta["style"] = c.get("style", "casual")
+        meta["price"] = c.get("price")
+        return meta
+
+    # Flutter often sends product_name without product_id — map to static catalog
+    if product_name:
+        pn = product_name.strip().lower()
+        for p in RECOMMENDATION_CATALOG:
+            if p["name"].strip().lower() == pn:
+                meta["item_id"] = p["id"]
+                meta.setdefault("product_id", p["id"])
+                meta["category"] = p["category"]
+                meta["color"] = p.get("color", "unknown")
+                meta["brand"] = p.get("brand", "unknown")
+                meta["style"] = p.get("style", "casual")
+                meta["price"] = p.get("price")
+                return meta
+
+    if db is not None and product_name:
+        row = _sql_fetch_product_by_name(db, product_name.strip())
+        if row:
+            meta["item_id"] = str(row["id"])
+            meta["product_db_id"] = row["id"]
+            meta["category"] = row.get("category") or "top"
+            meta["brand"] = row.get("brand") or "unknown"
+            meta["style"] = row.get("subcategory") or "casual"
+            meta["color"] = row.get("color_guess") or "unknown"
+            meta["price"] = float(row["price"]) if row.get("price") is not None else None
+            return meta
+
+    meta["item_id"] = str(product_id or product_name or "unknown")
+    meta.setdefault("category", "top")
+    meta.setdefault("color", "unknown")
+    meta.setdefault("brand", "unknown")
+    meta.setdefault("style", "casual")
+    return meta
+
+
+def _resolve_image_path_for_features(url_or_path: Optional[str]) -> Optional[str]:
+    """Map try-on stored cloth/result URL or relative path to a local file usable by PIL."""
+    if not url_or_path:
+        return None
+    s = url_or_path.strip()
+    if s.startswith("http://") or s.startswith("https://"):
+        try:
+            import requests
+
+            resp = requests.get(s, timeout=20)
+            if resp.status_code != 200:
+                return None
+            os.makedirs("temp", exist_ok=True)
+            tmp = os.path.join("temp", f"rec_feat_{uuid.uuid4().hex}.png")
+            with open(tmp, "wb") as f:
+                f.write(resp.content)
+            return tmp
+        except Exception as e:
+            logger.debug("Could not download image for features: %s", e)
+            return None
+    if os.path.isfile(s):
+        return s
+    rel = s.lstrip("/")
+    if os.path.isfile(rel):
+        return rel
+    return None
+
+
+def _item_id_from_tryon_meta(meta: Dict, tryon_id: int) -> str:
+    return str(meta.get("item_id") or meta.get("product_id") or f"history_{tryon_id}")
+
+
+def _infer_category_from_tryon(tryon, metadata: Dict) -> str:
+    c = metadata.get("category")
+    if c and c != "unknown":
+        return c
+    ct = (getattr(tryon, "cloth_type", None) or "").lower()
+    if not ct:
+        return "unknown"
+    if "jean" in ct or "pant" in ct or "trouser" in ct:
+        return "bottom"
+    if "dress" in ct:
+        return "dress"
+    if "shoe" in ct or "sneaker" in ct or "boot" in ct:
+        return "shoes"
+    if "jacket" in ct or "coat" in ct or "blazer" in ct or "hoodie" in ct:
+        return "outerwear"
+    if "shirt" in ct or "top" in ct or "tee" in ct or "sweater" in ct:
+        return "top"
+    return "top"
+
+
+def _infer_color_from_tryon(tryon, metadata: Dict) -> Optional[str]:
+    if metadata.get("color"):
+        return str(metadata["color"]).lower()
+    cc = getattr(tryon, "cloth_color", None)
+    if cc:
+        return str(cc).lower()
+    return None
+
+
+def _infer_brand_from_tryon(tryon, metadata: Dict) -> Optional[str]:
+    if metadata.get("brand"):
+        return str(metadata["brand"])
+    cb = getattr(tryon, "cloth_brand", None)
+    return str(cb) if cb else None
 
 
 class ClothingItem:
@@ -99,7 +408,21 @@ class RecommendationEngine:
             List of recommended items with scores
         """
         logger.info(f"Generating recommendations for user {user_id}")
-        
+
+        tried_items_set = self._get_tried_items(user_id)
+
+        visual_active = self.use_visual_similarity
+        if visual_active:
+            try:
+                from app.services.visual_similarity_service import get_visual_recommendation_service
+
+                vs = get_visual_recommendation_service()
+                se = getattr(vs, "search_engine", None)
+                if not se or not getattr(se, "item_ids", None):
+                    visual_active = False
+            except Exception:
+                visual_active = False
+
         # Collect scores from different strategies
         scores = defaultdict(float)
         
@@ -128,16 +451,15 @@ class RecommendationEngine:
         for item_id, score in trending_scores.items():
             scores[item_id] += score * self.weights['trending']
         
-        # 6. Visual similarity (if enabled)
-        if self.use_visual_similarity:
+        # 6. Visual similarity (only if FAISS index has been built)
+        if visual_active:
             visual_scores = self._visual_similarity_recommendations(user_id, category)
             for item_id, score in visual_scores.items():
                 scores[item_id] += score * self.weights['visual_similarity']
-        
+
         # Filter already tried items if requested
         if exclude_tried:
-            tried_items = self._get_tried_items(user_id)
-            scores = {k: v for k, v in scores.items() if k not in tried_items}
+            scores = {k: v for k, v in scores.items() if k not in tried_items_set}
         
         # Sort by score and return top N
         sorted_items = sorted(scores.items(), key=lambda x: x[1], reverse=True)
@@ -153,9 +475,33 @@ class RecommendationEngine:
                     'recommendation_score': round(score, 3),
                     'reason': self._generate_reason(user_id, item_id)
                 })
-        
+
+        # Cold start / low signal: fill from catalog so the UI always has items to show
+        if len(recommendations) < min(limit, 8):
+            seen_ids = {str(r.get("id", "")) for r in recommendations if r.get("id")}
+            for p in RECOMMENDATION_CATALOG:
+                if category and p.get("category") != category:
+                    continue
+                pid = p["id"]
+                if pid in seen_ids:
+                    continue
+                if exclude_tried and pid in tried_items_set:
+                    continue
+                row = dict(p)
+                row["image"] = row.get("image_url", "")
+                recommendations.append(
+                    {
+                        **row,
+                        "recommendation_score": 0.05,
+                        "reason": "Popular styles you might like",
+                    }
+                )
+                seen_ids.add(pid)
+                if len(recommendations) >= limit:
+                    break
+
         logger.info(f"Generated {len(recommendations)} recommendations")
-        return recommendations
+        return recommendations[:limit]
     
     def _content_based_recommendations(
         self,
@@ -195,14 +541,17 @@ class RecommendationEngine:
         brands = Counter()
         
         for tryon in recent_tryons:
-            metadata = tryon.metadata or {}
-            categories[metadata.get('category', 'unknown')] += 1
-            if metadata.get('color'):
-                colors[metadata.get('color')] += 1
-            if metadata.get('style'):
-                styles[metadata.get('style')] += 1
-            if metadata.get('brand'):
-                brands[metadata.get('brand')] += 1
+            metadata = _tryon_meta(tryon)
+            cat = _infer_category_from_tryon(tryon, metadata)
+            categories[cat] += 1
+            col = _infer_color_from_tryon(tryon, metadata)
+            if col:
+                colors[col] += 1
+            if metadata.get("style"):
+                styles[metadata.get("style")] += 1
+            br = _infer_brand_from_tryon(tryon, metadata)
+            if br:
+                brands[br] += 1
         
         # Get similar items from wardrobe/catalog
         # (In production, query your product database)
@@ -247,26 +596,25 @@ class RecommendationEngine:
         """
         Recommend items similar to user's favorites
         """
-        from app.models.favorites import Favorite
-        
         scores = defaultdict(float)
-        
-        # Get user's favorites
-        favorites = (
-            self.db.query(Favorite)
-            .filter(Favorite.user_id == user_id)
-            .all()
-        )
-        
-        if not favorites:
+
+        fav_rows = _sql_user_favorite_product_rows(self.db, user_id)
+        if not fav_rows:
             return scores
-        
-        # Get metadata from favorited try-ons
+
         favorite_items = []
-        for fav in favorites:
-            if fav.tryon_history:
-                metadata = fav.tryon_history.metadata or {}
-                favorite_items.append(metadata)
+        for prod in fav_rows:
+            if not prod or prod.get("id") is None:
+                continue
+            favorite_items.append(
+                {
+                    "item_id": str(prod["id"]),
+                    "category": prod.get("category"),
+                    "color": prod.get("color_guess") or "unknown",
+                    "brand": prod.get("brand") or "unknown",
+                    "style": prod.get("subcategory") or "casual",
+                }
+            )
         
         # Extract common characteristics
         categories = Counter(item.get('category') for item in favorite_items if item.get('category'))
@@ -357,49 +705,46 @@ class RecommendationEngine:
         "Users who tried similar items also tried..."
         """
         from app.models.tryon_history import TryOnHistory
-        from app.models.favorites import Favorite
-        
+
         scores = defaultdict(float)
-        
-        # Find users with similar taste
+
         similar_users = self._find_similar_users(user_id, limit=10)
-        
+
         if not similar_users:
             return scores
-        
-        # Get what similar users tried and liked
+
         for similar_user_id, similarity_score in similar_users:
-            # Get their recent try-ons
             their_tryons = (
                 self.db.query(TryOnHistory)
                 .filter(
                     and_(
                         TryOnHistory.user_id == similar_user_id,
-                        TryOnHistory.created_at >= datetime.utcnow() - timedelta(days=60)
+                        TryOnHistory.created_at >= datetime.utcnow() - timedelta(days=60),
                     )
                 )
                 .limit(15)
                 .all()
             )
-            
-            # Get their favorites
-            their_favorites = (
-                self.db.query(Favorite)
-                .filter(Favorite.user_id == similar_user_id)
-                .all()
-            )
-            
-            # Score items from similar users
+
+            their_fav_ids = _sql_user_favorite_product_ids(self.db, similar_user_id)
+
             for tryon in their_tryons:
-                metadata = tryon.metadata or {}
-                item_id = metadata.get('item_id', f"item_{tryon.id}")
-                
-                # Higher score if they favorited it
-                is_favorite = any(f.tryon_history_id == tryon.id for f in their_favorites)
+                metadata = _tryon_meta(tryon)
+                item_id = _item_id_from_tryon_meta(metadata, tryon.id)
+
+                is_favorite = False
+                db_pid = metadata.get("product_db_id")
+                if db_pid is not None and int(db_pid) in their_fav_ids:
+                    is_favorite = True
+                elif metadata.get("product_id") and str(metadata.get("product_id")).isdigit():
+                    if int(metadata["product_id"]) in their_fav_ids:
+                        is_favorite = True
+
                 base_score = 0.8 if is_favorite else 0.5
-                
-                scores[item_id] += base_score * similarity_score
-        
+
+                if category is None or metadata.get("category") == category:
+                    scores[item_id] += base_score * similarity_score
+
         return scores
     
     def _trending_items(self, category: Optional[str] = None) -> Dict[str, float]:
@@ -421,11 +766,11 @@ class RecommendationEngine:
         # Count item popularity
         item_counts = Counter()
         for tryon in recent_tryons:
-            metadata = tryon.metadata or {}
-            item_id = metadata.get('item_id', f"item_{tryon.id}")
-            
+            metadata = _tryon_meta(tryon)
+            item_id = _item_id_from_tryon_meta(metadata, tryon.id)
+
             # Filter by category if specified
-            if category is None or metadata.get('category') == category:
+            if category is None or metadata.get("category") == category:
                 item_counts[item_id] += 1
         
         # Normalize scores
@@ -475,14 +820,11 @@ class RecommendationEngine:
             # For each try-on, find visually similar items
             all_similar = {}
             for tryon in recent_tryons:
-                # Use the cloth image if available
-                image_path = None
-                if hasattr(tryon, 'cloth_image_path') and tryon.cloth_image_path:
-                    image_path = tryon.cloth_image_path
-                elif hasattr(tryon, 'result_image_path') and tryon.result_image_path:
-                    image_path = tryon.result_image_path
-                
-                if image_path and os.path.exists(image_path):
+                cloth_u = getattr(tryon, "cloth_image_url", None) or ""
+                result_u = getattr(tryon, "result_image_url", None) or ""
+                image_path = _resolve_image_path_for_features(cloth_u) or _resolve_image_path_for_features(result_u)
+
+                if image_path:
                     try:
                         similar_items = visual_service.get_similar_items_by_image(
                             image_path=image_path,
@@ -529,8 +871,7 @@ class RecommendationEngine:
         Returns: List of (user_id, similarity_score)
         """
         from app.models.tryon_history import TryOnHistory
-        from app.models.favorites import Favorite
-        
+
         # Get current user's preferences
         user_tryons = (
             self.db.query(TryOnHistory)
@@ -546,7 +887,7 @@ class RecommendationEngine:
         user_categories = Counter()
         user_styles = Counter()
         for tryon in user_tryons:
-            metadata = tryon.metadata or {}
+            metadata = _tryon_meta(tryon)
             user_categories[metadata.get('category', 'unknown')] += 1
             user_styles[metadata.get('style', 'unknown')] += 1
         
@@ -571,7 +912,7 @@ class RecommendationEngine:
             other_categories = Counter()
             other_styles = Counter()
             for tryon in other_tryons:
-                metadata = tryon.metadata or {}
+                metadata = _tryon_meta(tryon)
                 other_categories[metadata.get('category', 'unknown')] += 1
                 other_styles[metadata.get('style', 'unknown')] += 1
             
@@ -620,105 +961,134 @@ class RecommendationEngine:
         
         return dot_product / (mag1 * mag2)
     
+    def _all_catalog_clothing_items(self, category_filter: Optional[str] = None) -> List[ClothingItem]:
+        """Merge static RECOMMENDATION_CATALOG with active rows from `products` table."""
+        items: List[ClothingItem] = []
+        seen: set = set()
+
+        for p in RECOMMENDATION_CATALOG:
+            if category_filter and p.get("category") != category_filter:
+                continue
+            pid = p["id"]
+            if pid in seen:
+                continue
+            seen.add(pid)
+            items.append(
+                ClothingItem(
+                    item_id=pid,
+                    name=p["name"],
+                    category=p["category"],
+                    color=p.get("color"),
+                    brand=p.get("brand"),
+                    price=p.get("price"),
+                    image_url=p.get("image_url"),
+                    style=p.get("style"),
+                )
+            )
+
+        for row in _sql_fetch_products_catalog(self.db, category_filter):
+            if not row or row.get("id") is None:
+                continue
+            cid = str(row["id"])
+            if cid in seen:
+                continue
+            items.append(
+                ClothingItem(
+                    item_id=cid,
+                    name=row.get("name") or "",
+                    category=row.get("category") or "top",
+                    color=row.get("color_guess") or "unknown",
+                    brand=row.get("brand"),
+                    price=row.get("price"),
+                    image_url=row.get("main_image_url"),
+                    style=row.get("subcategory") or "casual",
+                )
+            )
+            seen.add(cid)
+
+        return items
+
     def _find_similar_items(
         self,
         categories: List[str] = None,
         colors: List[str] = None,
         styles: List[str] = None,
         brands: List[str] = None,
-        category_filter: Optional[str] = None
+        category_filter: Optional[str] = None,
     ) -> List[ClothingItem]:
-        """
-        Find items matching given criteria
-        In production, this would query your product catalog/database
-        """
-        # Mock implementation - replace with actual product database query
-        mock_items = [
-            ClothingItem("item_001", "Classic T-Shirt", "top", "white", "Nike", 29.99, tags=["casual", "basic"]),
-            ClothingItem("item_002", "Denim Jeans", "bottom", "blue", "Levi's", 79.99, tags=["casual", "denim"]),
-            ClothingItem("item_003", "Blazer", "outerwear", "black", "Zara", 99.99, tags=["formal", "professional"]),
-            ClothingItem("item_004", "Summer Dress", "dress", "floral", "H&M", 49.99, tags=["casual", "summer"]),
-            ClothingItem("item_005", "Sneakers", "shoes", "white", "Adidas", 89.99, tags=["casual", "sport"]),
-        ]
-        
-        # Filter by criteria
-        filtered = []
-        for item in mock_items:
-            if category_filter and item.category != category_filter:
-                continue
-            
+        categories = [c for c in (categories or []) if c and c != "unknown"]
+        colors = [c for c in (colors or []) if c and c != "unknown"]
+        styles = [s for s in (styles or []) if s and s != "unknown"]
+        brands = [b for b in (brands or []) if b and b != "unknown"]
+
+        all_items = self._all_catalog_clothing_items(category_filter)
+        if not any([categories, colors, styles, brands]):
+            return all_items[:25]
+
+        out: List[ClothingItem] = []
+        seen_ids: set = set()
+        for item in all_items:
+            match = False
             if categories and item.category in categories:
-                filtered.append(item)
-            elif colors and item.color in colors:
-                filtered.append(item)
-            elif styles and item.style in styles:
-                filtered.append(item)
-            elif brands and item.brand in brands:
-                filtered.append(item)
-        
-        return filtered
-    
+                match = True
+            if colors and item.color and item.color in colors:
+                match = True
+            if styles and item.style and item.style in styles:
+                match = True
+            if brands and item.brand and item.brand in brands:
+                match = True
+            if match and item.item_id not in seen_ids:
+                seen_ids.add(item.item_id)
+                out.append(item)
+
+        return out if out else all_items[:20]
+
     def _find_items_by_categories(
         self,
         categories: List[str],
-        category_filter: Optional[str] = None
+        category_filter: Optional[str] = None,
     ) -> List[ClothingItem]:
-        """Find items in specified categories"""
-        # Mock implementation
-        mock_items = [
-            ClothingItem("item_006", "Hoodie", "outerwear", "gray", "Gap", 59.99),
-            ClothingItem("item_007", "Chinos", "bottom", "khaki", "Uniqlo", 49.99),
-            ClothingItem("item_008", "Polo Shirt", "top", "navy", "Ralph Lauren", 89.99),
-        ]
-        
-        return [item for item in mock_items if item.category in categories]
-    
+        cats = {c for c in categories if c}
+        all_items = self._all_catalog_clothing_items(category_filter)
+        return [i for i in all_items if i.category in cats]
+
     def _get_tried_items(self, user_id: int) -> set:
         """Get set of item IDs user has already tried"""
         from app.models.tryon_history import TryOnHistory
-        
-        tryons = (
-            self.db.query(TryOnHistory)
-            .filter(TryOnHistory.user_id == user_id)
-            .all()
-        )
-        
+
+        tryons = self.db.query(TryOnHistory).filter(TryOnHistory.user_id == user_id).all()
+
         tried = set()
         for tryon in tryons:
-            metadata = tryon.metadata or {}
-            item_id = metadata.get('item_id', f"item_{tryon.id}")
-            tried.add(item_id)
-        
+            metadata = _tryon_meta(tryon)
+            tried.add(_item_id_from_tryon_meta(metadata, tryon.id))
+
         return tried
-    
-    # Catalog aligned with frontend allProducts (name used for matching)
-    _PRODUCT_CATALOG = [
-        {"id": "balmain-shirt", "name": "Balmain Paris Baroque Print Shirt", "category": "top", "price": 3049.00, "image_url": "assets/images/Balmain Paris Shirt.jpg"},
-        {"id": "balmain-sweater", "name": "Balmain Monogram Knit Sweater", "category": "top", "price": 429.00, "image_url": "assets/images/Balmain_Tshirt.jpg"},
-        {"id": "blazer", "name": "Navy Blue Tailored Blazer", "category": "outerwear", "price": 279.00, "image_url": "assets/images/Blazer.jpg"},
-        {"id": "flowing-shirt", "name": "Soft Washed Blue Button-Up Shirt", "category": "top", "price": 79.00, "image_url": "assets/images/Flowing Shirt.jpg"},
-        {"id": "hoodie", "name": "Soho NYC Athletics Hoodie", "category": "outerwear", "price": 69.00, "image_url": "assets/images/Hoodie H&M.jpg"},
-        {"id": "jeans", "name": "Light Wash Wide-Leg Denim Jeans", "category": "bottom", "price": 89.00, "image_url": "assets/images/Loose Jeans.jpg"},
-        {"id": "suede-jacket", "name": "Mint Green Corduroy Trucker Jacket", "category": "outerwear", "price": 149.00, "image_url": "assets/images/Suede Jacket.jpeg"},
-        {"id": "zara-shirt", "name": "State Park Striped Overshirt", "category": "top", "price": 99.00, "image_url": "assets/images/ZARA_Shirt.jpg"},
-        {"id": "zara-sweater", "name": "Oatmeal Ribbed Crewneck Sweater", "category": "top", "price": 119.00, "image_url": "assets/images/Zara_Sweater.jpg"},
-        {"id": "zara-tshirt", "name": "Classic Burgundy Crew Neck T-Shirt", "category": "top", "price": 49.00, "image_url": "assets/images/ZARA_Tshirt.jpg"},
-        {"id": "coat", "name": "Light Green Suede Trucker Jacket", "category": "outerwear", "price": 189.00, "image_url": "assets/images/Coat.png"},
-        {"id": "stussy-tshirt", "name": "Black Stüssy Logo T-Shirt", "category": "top", "price": 59.00, "image_url": "assets/images/Tshirt_Web.jpg"},
-    ]
 
     def _get_item_details(self, item_id: str) -> Optional[Dict]:
-        """Get item details by ID; uses product catalog aligned with frontend."""
-        by_id = {p["id"]: p for p in self._PRODUCT_CATALOG}
+        """Resolve item by string catalog id, product name, or numeric DB product id."""
+        by_id = {p["id"]: p for p in RECOMMENDATION_CATALOG}
         if item_id in by_id:
             out = dict(by_id[item_id])
             out.setdefault("image", out.get("image_url", ""))
             return out
-        by_name = {p["name"]: p for p in self._PRODUCT_CATALOG}
+        by_name = {p["name"]: p for p in RECOMMENDATION_CATALOG}
         if item_id in by_name:
             out = dict(by_name[item_id])
             out.setdefault("image", out.get("image_url", ""))
             return out
+        if item_id.isdigit():
+            row = _sql_fetch_product_by_id(self.db, int(item_id))
+            if row:
+                img = row.get("main_image_url") or ""
+                return {
+                    "id": str(row["id"]),
+                    "name": row.get("name", ""),
+                    "category": row.get("category", "top"),
+                    "price": row.get("price", 0),
+                    "image_url": img,
+                    "image": img,
+                }
         return None
     
     def _generate_reason(self, user_id: int, item_id: str) -> str:
@@ -738,20 +1108,15 @@ class RecommendationEngine:
         Get user's style profile for personalization
         """
         from app.models.tryon_history import TryOnHistory
-        from app.models.favorites import Favorite
-        
+
         # Get all user activity
         tryons = (
             self.db.query(TryOnHistory)
             .filter(TryOnHistory.user_id == user_id)
             .all()
         )
-        
-        favorites = (
-            self.db.query(Favorite)
-            .filter(Favorite.user_id == user_id)
-            .count()
-        )
+
+        favorites = _sql_count_user_favorites(self.db, user_id)
         
         # Analyze preferences
         categories = Counter()
@@ -761,7 +1126,7 @@ class RecommendationEngine:
         price_range = []
         
         for tryon in tryons:
-            metadata = tryon.metadata or {}
+            metadata = _tryon_meta(tryon)
             categories[metadata.get('category', 'unknown')] += 1
             if metadata.get('color'):
                 colors[metadata.get('color')] += 1

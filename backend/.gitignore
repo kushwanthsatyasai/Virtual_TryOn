@@ -42,6 +42,10 @@ env/
 *.ipynb
 .ipynb_checkpoints/
 
+# Local training data & user uploads (huge / machine-specific — do not commit)
+dataset/
+uploads/
+
 # Test images and outputs
 test_images/
 static/generated_outputs/

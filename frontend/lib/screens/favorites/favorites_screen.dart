@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import '../product/product_detail_screen.dart'; // ProductItem
+import '../product/product_detail_screen.dart';
+import '../../models/product_item.dart';
 import '../../widgets/bottom_navigation_bar.dart';
 import '../../widgets/chat_fab_overlay.dart';
 import '../../services/favorites_cart_store.dart';

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../product/product_detail_screen.dart';
+import '../../models/product_item.dart';
 import '../../widgets/chat_fab_overlay.dart';
 import '../../data/products_data.dart';
 
