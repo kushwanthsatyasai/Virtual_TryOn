@@ -1,11 +1,8 @@
 import 'package:dio/dio.dart';
-import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:google_sign_in_web/web_only.dart' as gsi_web;
 
 import '../../services/auth_api.dart';
 import '../home/home_screen.dart';
@@ -24,51 +21,21 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _loading = false;
   bool _obscurePassword = true;
-  static bool _googleInitialized = false;
 
-  StreamSubscription<GoogleSignInAuthenticationEvent>? _googleAuthSub;
-  Future<void>? _googleWebInitFuture;
+  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
 
-  @override
-  void initState() {
-    super.initState();
-
-    if (kIsWeb) {
-      _googleWebInitFuture = _initGoogleWeb();
-      _googleAuthSub = GoogleSignIn.instance.authenticationEvents.listen(
-        (event) async {
-          if (!mounted) return;
-          if (event is GoogleSignInAuthenticationEventSignIn) {
-            await _handleGoogleAccount(event.user);
-          }
-        },
-      );
-    }
-  }
-
-  Future<void> _initGoogleWeb() async {
-    const clientId = String.fromEnvironment(
-      'GOOGLE_SIGNIN_CLIENT_ID',
-      defaultValue: '',
-    );
-    if (!_googleInitialized) {
-      await GoogleSignIn.instance.initialize(
-        // For web, plugin reads this or falls back to the HTML meta tag.
-        clientId: clientId.isEmpty ? null : clientId,
-      );
-      _googleInitialized = true;
-    }
-  }
-
-  Future<void> _handleGoogleAccount(GoogleSignInAccount account) async {
-    if (_loading) return;
-    setState(() => _loading = true);
-
+  Future<void> _signInWithGoogle() async {
     try {
+      final account = await _googleSignIn.signIn();
+      if (account == null) return; // user cancelled
+
+      if (_loading) return;
+      setState(() => _loading = true);
+
       final email = account.email;
       final fullName = account.displayName ?? '';
       final googleId = account.id;
-      final auth = account.authentication;
+      final auth = await account.authentication;
 
       final result = await AuthApi.googleLogin(
         email: email,
@@ -111,35 +78,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _signInWithGoogle() async {
-    try {
-      // google_sign_in v7+: use the singleton instance + `authenticate`.
-      if (!_googleInitialized) {
-        const clientId = String.fromEnvironment(
-          'GOOGLE_SIGNIN_CLIENT_ID',
-          defaultValue: '',
-        );
-        await GoogleSignIn.instance.initialize(
-          // For web: plugin reads this or falls back to the HTML meta tag.
-          clientId: clientId.isEmpty ? null : clientId,
-        );
-        _googleInitialized = true;
-      }
-      final account = await GoogleSignIn.instance.authenticate(
-        scopeHint: const <String>['email', 'profile'],
-      );
-      await _handleGoogleAccount(account);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
-    }
-  }
-
   @override
   void dispose() {
-    _googleAuthSub?.cancel();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -377,68 +317,32 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 24),
                     // Google Sign In button
-                    if (kIsWeb)
-                      FutureBuilder<void>(
-                        future: _googleWebInitFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState != ConnectionState.done) {
-                            return SizedBox(
-                              width: double.infinity,
-                              height: 56,
-                              child: Center(
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    color: primary,
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-                          return SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: gsi_web.renderButton(
-                            configuration: gsi_web.GSIButtonConfiguration(
-                              type: gsi_web.GSIButtonType.standard,
-                              size: gsi_web.GSIButtonSize.large,
-                              shape: gsi_web.GSIButtonShape.rectangular,
-                              text: gsi_web.GSIButtonText.signinWith,
-                              theme: gsi_web.GSIButtonTheme.filledBlue,
-                            ),
-                            ),
-                          );
-                        },
-                      )
-                    else
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            side: BorderSide(color: surface),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            foregroundColor: onSurface,
-                            textStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              fontFamily: 'SpaceGrotesk',
-                            ),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          side: BorderSide(color: surface),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          icon: SvgPicture.asset(
-                            'assets/icons/google_logo.svg',
-                            width: 24,
-                            height: 24,
+                          foregroundColor: onSurface,
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            fontFamily: 'SpaceGrotesk',
                           ),
-                          label: const Text('Sign in with Google'),
-                          onPressed: _loading ? null : _signInWithGoogle,
                         ),
+                        icon: SvgPicture.asset(
+                          'assets/icons/google_logo.svg',
+                          width: 24,
+                          height: 24,
+                        ),
+                        label: const Text('Sign in with Google'),
+                        onPressed: _loading ? null : _signInWithGoogle,
                       ),
+                    ),
                     const SizedBox(height: 32),
                     // Sign up link
                     Row(
